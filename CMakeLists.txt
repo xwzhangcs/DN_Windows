@@ -5,6 +5,7 @@ set(CMAKE_BUILD_TYPE Release)
 find_package(Torch REQUIRED)
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
+include_directories("D:\\DN_Windows\\include\\")
 
 add_executable(dn_lego_syn dn_lego_syn.cpp)
 target_link_libraries(dn_lego_syn "${TORCH_LIBRARIES}")
