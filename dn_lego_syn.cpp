@@ -70,13 +70,16 @@ void process_single_chip(std::string metajson, std::string modeljson);
 
 int main(int argc, const char* argv[]) {
 	if (argc != 3) {
-		std::cerr << "usage: app <path-to-image-JSON-file> <path-to-model-config-JSON-file>\n";
+		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
 	std::string path(argv[1]);
 	std::vector<std::string> metaFiles = get_all_files_names_within_folder(path);
-	for (int i = 0; i < metaFiles.size(); i++)
-		std::cout << metaFiles[i] << std::endl;
+	for (int i = 0; i < metaFiles.size(); i++) {
+		std::string metajason = path + "/" + metaFiles[i];
+		std::cout << metajason << std::endl;
+		process_single_chip(metajason, argv[2]);
+	}
 	return 0;
 }
 
@@ -163,6 +166,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	docModel.ParseStream(isModel);
 	std::string model_name;
 	std::string grammar_name;
+	// flag debug
+	bool bDebug = readBoolValue(docModel, "debug", false);
 	if (bground) { // choose grammar2
 		grammar_name = "grammar2";
 	}
@@ -172,10 +177,12 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	rapidjson::Value& grammar = docModel[grammar_name.c_str()];
 	// path of DN model
 	model_name = readStringValue(grammar, "model");
-	std::cout << "model_name is " << model_name << std::endl;
+	if(bDebug)
+		std::cout << "model_name is " << model_name << std::endl;
 	// number of paras
 	int num_paras = readNumber(grammar, "number_paras", 5);
-	std::cout << "num_paras is " << num_paras << std::endl;
+	if (bDebug)
+		std::cout << "num_paras is " << num_paras << std::endl;
 	// range of Rows
 	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
 	if (tmp_array.size() != 2) {
@@ -183,7 +190,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		return;
 	}
 	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
-	std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
+	if (bDebug)
+		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
 	// range of Cols
 	tmp_array.empty();
 	tmp_array = read1DArray(grammar, "rangeOfCols");
@@ -192,7 +200,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		return;
 	}
 	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
-	std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
+	if (bDebug)
+		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
 	// range of Grouping
 	tmp_array.empty();
 	tmp_array = read1DArray(grammar, "rangeOfGrouping");
@@ -201,7 +210,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		return;
 	}
 	std::pair<int, int> imageGroups(tmp_array[0], tmp_array[1]);
-	std::cout << "imageGroups is " << imageGroups.first << ", " << imageGroups.second << std::endl;
+	if (bDebug)
+		std::cout << "imageGroups is " << imageGroups.first << ", " << imageGroups.second << std::endl;
 	// default size for NN
 	int height = 224; // DNN image height
 	int width = 224; // DNN image width
@@ -213,8 +223,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	width = tmp_array[0];
 	height = tmp_array[1];
-	std::cout << "width is " << width << std::endl;
-	std::cout << "height is " << height << std::endl;
 	std::pair<int, int> imageDoors(2, 6);
 	if (bground) {
 		tmp_array.empty();
@@ -225,7 +233,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		}
 		imageDoors.first = tmp_array[0];
 		imageDoors.second = tmp_array[1];
-		std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
+		if (bDebug)
+			std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
 	}
 	tmp_array.empty();
 	tmp_array = read1DArray(docModel, "targetChipSize");
@@ -235,19 +244,23 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	double target_width = tmp_array[0];
 	double target_height = tmp_array[1];
+	// get facade folder path
+	std::string facades_folder = readStringValue(docModel, "facadesFolder");
 	// get chips folder path
-	std::string chips_folder = readStringValue(docModel, "chipFolder");
-	// get chips folder path
+	std::string chips_folder = readStringValue(docModel, "chipsFolder");
+	// get segs folder path
 	std::string segs_folder = readStringValue(docModel, "segsFolder");
+	// get segs folder path
+	std::string segs_color_folder = readStringValue(docModel, "segsColorFolder");
 	// get dnn folder path
-	std::string dnn_folder = readStringValue(docModel, "dnnFolder");
+	std::string dnns_folder = readStringValue(docModel, "dnnsFolder");
+	// get threshold path
+	std::string thresholds_file = readStringValue(docModel, "thresholds");
 	fclose(fp);
 	// Deserialize the ScriptModule from a file using torch::jit::load().
 	std::shared_ptr<torch::jit::script::Module> module = torch::jit::load(model_name);
 	module->to(at::kCUDA);
-
 	assert(module != nullptr);
-	std::cout << "ok\n";
 
 	// reshape the chip and pick the representative one
 	double ratio_width, ratio_height;
@@ -263,8 +276,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		src_chip = cv::imread(img_name);
 		ratio_width = target_width / facChip_size[0] - 1;
 		ratio_height = target_height / facChip_size[1] - 1;
-		std::cout << "ratio_width is " << ratio_width << std::endl;
-		std::cout << "ratio_height is " << ratio_height << std::endl;
+		if (bDebug) {
+			std::cout << "ratio_width is " << ratio_width << std::endl;
+			std::cout << "ratio_height is " << ratio_height << std::endl;
+		}
 		int top = (int)(ratio_height * src_chip.rows);
 		int bottom = 0;
 		int left = 0;
@@ -280,8 +295,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		int times = ceil(facChip_size[0] / target_width);
 		ratio_width = (times * target_width - facChip_size[0]) / facChip_size[0];
 		ratio_height = target_height / facChip_size[1] - 1;
-		std::cout << "ratio_width is " << ratio_width << std::endl;
-		std::cout << "ratio_height is " << ratio_height << std::endl;
+		if (bDebug) {
+			std::cout << "ratio_width is " << ratio_width << std::endl;
+			std::cout << "ratio_height is " << ratio_height << std::endl;
+		}
 		int top = (int)(ratio_height * src_chip.rows);
 		int bottom = 0;
 		int left = 0;
@@ -298,8 +315,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		int times = ceil(facChip_size[1] / target_height);
 		ratio_height = (times * target_height - facChip_size[1]) / facChip_size[1];
 		ratio_width = target_width / facChip_size[0] - 1;
-		std::cout << "ratio_width is " << ratio_width << std::endl;
-		std::cout << "ratio_height is " << ratio_height << std::endl;
+		if (bDebug) {
+			std::cout << "ratio_width is " << ratio_width << std::endl;
+			std::cout << "ratio_height is " << ratio_height << std::endl;
+		}
 		int top = (int)(ratio_height * src_chip.rows);
 		int bottom = 0;
 		int left = 0;
@@ -317,8 +336,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		int times_height = ceil(facChip_size[1] / target_height);
 		ratio_width = (times_width * target_width - facChip_size[0]) / facChip_size[0];
 		ratio_height = (times_height * target_height - facChip_size[1]) / facChip_size[1];
-		std::cout << "ratio_width is " << ratio_width << std::endl;
-		std::cout << "ratio_height is " << ratio_height << std::endl;
+		if (bDebug) {
+			std::cout << "ratio_width is " << ratio_width << std::endl;
+			std::cout << "ratio_height is " << ratio_height << std::endl;
+		}
 		int top = (int)(ratio_height * src_chip.rows);
 		int bottom = 0;
 		int left = 0;
@@ -333,6 +354,9 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	else {
 		// do nothing
 	}
+	// for debugging
+	if(bDebug)
+		cv::imwrite(facades_folder + "/" + img_name.substr(found + 1), src_chip);
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
 	//src = cv::imread(img_name, 1);
@@ -346,7 +370,14 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	dst_ehist = bgr[2];
 	// threshold classification
 	int threshold = find_threshold(src, bground);
-	std::wcout << "threshold is " << threshold << std::endl;
+	if (bDebug) {
+		std::ofstream out_param(thresholds_file, std::ios::app);
+		out_param << img_name.substr(found + 1);
+		out_param << ",";
+		out_param << threshold;
+		out_param << "\n";
+	}
+	
 	cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
 	// generate input image for DNN
 	cv::Scalar bg_color(255, 255, 255); // white back ground
@@ -459,6 +490,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// recover to the original image
 	cv::resize(syn_img, syn_img, src.size());
 	cv::resize(dnn_img, dnn_img, src.size());
+	if (bDebug)
+		cv::imwrite(segs_folder + "/" + img_name.substr(found + 1), dnn_img);
 	for (int i = 0; i < syn_img.size().height; i++) {
 		for (int j = 0; j < syn_img.size().width; j++) {
 			if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
@@ -473,7 +506,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			}
 		}
 	}
-	cv::imwrite(dnn_folder + "/" + img_name.substr(found + 1), syn_img);
+	if (bDebug)
+		cv::imwrite(dnns_folder + "/" + img_name.substr(found + 1), syn_img);
 
 	for (int i = 0; i < dnn_img.size().height; i++) {
 		for (int j = 0; j < dnn_img.size().width; j++) {
@@ -489,7 +523,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			}
 		}
 	}
-	cv::imwrite(segs_folder + "/" + img_name.substr(found + 1), dnn_img);
+	if (bDebug)
+		cv::imwrite(segs_color_folder + "/" + img_name.substr(found + 1), dnn_img);
 }
 
 std::vector<string> get_all_files_names_within_folder(std::string folder)
@@ -521,7 +556,7 @@ int find_threshold(cv::Mat src, bool bground) {
 		cv::equalizeHist(bgr[i], bgr[i]);
 	/// Load an image
 	cv::Mat src_gray = bgr[2];
-	for (int threshold = 40; threshold < 160; threshold += 5) {
+	for (int threshold = 40; threshold < 160; threshold += 10) {
 		cv::Mat dst;
 		cv::threshold(src_gray, dst, threshold, max_BINARY_value, cv::THRESH_BINARY);
 		int count = 0;
@@ -534,6 +569,7 @@ int find_threshold(cv::Mat src, bool bground) {
 			}
 		}
 		float percentage = count * 1.0 / (dst.size().height * dst.size().width);
+		std::cout << "percentage is " << percentage << std::endl;
 		if (percentage > 0.25 && !bground)
 			return threshold;
 		if (percentage > 0.35 && bground)

@@ -2,3 +2,9 @@ data/
 build/
 image/
 metadata/
+chips/
+segs/
+dnns/
+facades/
+segsColor/
+thresholds.txt
