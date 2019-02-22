@@ -15,7 +15,9 @@
 		"rangeOfDoors":[2,6]
 	},
 	"facadesFolder":"../facades",
+	"facadehistFolder":"../facadeshist",
 	"chipsFolder":"../chips",
+	"chiphistFolder":"../chipshist",
 	"segsFolder":"../segs",
 	"segsColorFolder":"../segsColor",
 	"dnnsFolder":"../dnns",

@@ -103,15 +103,15 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// first decide whether it's a valid chip
 	bool bvalid = false;
 	int type = 0;
-	if (facChip_size[0] < 30.0 && facChip_size[1] < 30.0 && score > 0.95) {
+	if (facChip_size[0] < 30.0 && facChip_size[0] > 8.0 && facChip_size[1] < 30.0 && facChip_size[1] > 8.0 && score > 0.95) {
 		type = 1;
 		bvalid = true;
 	}
-	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && score > 0.9) {
+	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 8.0 && score > 0.9) {
 		type = 2;
 		bvalid = true;
 	}
-	else if (facChip_size[0] < 30.0 && facChip_size[1] > 30.0 && score > 0.9) {
+	else if (facChip_size[0] < 30.0 && facChip_size[0] > 8.0 && facChip_size[1] > 30.0 && score > 0.9) {
 		type = 3;
 		bvalid = true;
 	}
@@ -243,8 +243,12 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	double target_height = tmp_array[1];
 	// get facade folder path
 	std::string facades_folder = readStringValue(docModel, "facadesFolder");
+	// get facadehist folder path
+	std::string facadeshist_folder = readStringValue(docModel, "facadehistFolder");
 	// get chips folder path
 	std::string chips_folder = readStringValue(docModel, "chipsFolder");
+	// get chiphist folder path
+	std::string chipshist_folder = readStringValue(docModel, "chiphistFolder");
 	// get segs folder path
 	std::string segs_folder = readStringValue(docModel, "segsFolder");
 	// get segs folder path
@@ -333,7 +337,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	else if (type == 4) {
 		src_chip = cv::imread(img_name);
-		int times_width = ceil(facChip_size[0] / target_width);
+		/*int times_width = ceil(facChip_size[0] / target_width);
 		int times_height = ceil(facChip_size[1] / target_height);
 		ratio_width = (times_width * target_width - facChip_size[0]) / facChip_size[0];
 		ratio_height = (times_height * target_height - facChip_size[1]) / facChip_size[1];
@@ -347,17 +351,34 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		int right = (int)(ratio_width * src_chip.cols);
 		int borderType = cv::BORDER_REFLECT_101;
 		cv::Scalar value(0, 0, 0);
-		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
+		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);*/
 		// crop 30 * 30
-		croppedImage = dst_chip(cv::Rect(dst_chip.size().width * 0.1, dst_chip.size().height * (times_height - 1) / times_height, dst_chip.size().width / times_width, dst_chip.size().height / times_height));
-		cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		if (!bground) {
+			double target_ratio_width = target_width / facChip_size[0];
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+			double padding_height_ratio = (1 - target_ratio_height) * 0.5;
+			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+			cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		}
+		else {
+			double target_ratio_width = target_width / facChip_size[0];
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+			double padding_height_ratio = (1 - target_ratio_height);
+			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+			cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		}
 	}
 	else {
 		// do nothing
 	}
 	// for debugging
-	if(bDebug)
+	if (bDebug) {
 		cv::imwrite(facades_folder + "/" + img_name.substr(found + 1), src_chip);
+		cv::Mat img_histeq = cv::imread("../histeq/"+ img_name.substr(found + 1));
+		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found + 1), img_histeq);
+	}
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
 	//src = cv::imread(img_name, 1);
@@ -383,6 +404,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		out_param_ground << ",";
 		out_param_ground << bground;
 		out_param_ground << "\n";
+
+		cv::imwrite(chipshist_folder + "/" + img_name.substr(found + 1), dst_ehist);
 	}
 	
 	cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
@@ -391,21 +414,56 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	cv::Scalar window_color(0, 0, 0); // black for windows
 	cv::Mat scale_img;
 	cv::resize(dst_classify, scale_img, cv::Size(width, height));
+
+	// correct the color
+	for (int i = 0; i < scale_img.size().height; i++) {
+		for (int j = 0; j < scale_img.size().width; j++) {
+			//noise
+			if ((int)scale_img.at<uchar>(i, j) < 255) {
+				scale_img.at<uchar>(i, j) = 0;
+			}
+		}
+	}
+	// add padding
+	int padding_size = 5;
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Scalar value(255, 255, 255);
+	cv::Mat grid_dst;
+	cv::copyMakeBorder(scale_img, scale_img, padding_size, padding_size, padding_size, padding_size, borderType, value);
+
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
 	cv::findContours(scale_img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
 
 	std::vector<cv::Rect> boundRect(contours.size());
+	std::vector<cv::RotatedRect> minRect(contours.size());
 	for (int i = 0; i < contours.size(); i++)
 	{
 		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		minRect[i] = minAreaRect(cv::Mat(contours[i]));
 	}
 	cv::Mat dnn_img(scale_img.size(), CV_8UC3, bg_color);
-	for (int i = 0; i< contours.size(); i++)
+	for (int i = 1; i< contours.size(); i++)
 	{
-		if (hierarchy[i][2] != -1) continue;
+		//if (hierarchy[i][2] != -1) continue;
+		if (hierarchy[i][3] != 0) continue;
 		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+		//cv::Point2f rect_points[4];
+		//minRect[i].points(rect_points);
+		//cv::Point vertices[4];
+		//for (int i = 0; i < 4; ++i) {
+		//	vertices[i] = rect_points[i];
+		//}
+		//for (int j = 0; j < 4; j++)
+		//line(dnn_img, rect_points[j], rect_points[(j + 1) % 4], color, 1, 8);
+		//cv::fillConvexPoly(dnn_img,
+		//	vertices,
+		//	4,
+		//	window_color);
 	}
+	// remove padding
+	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
+
 	cv::cvtColor(dnn_img, dnn_img, CV_BGR2RGB);
 	cv::Mat img_float;
 	dnn_img.convertTo(img_float, CV_32F, 1.0 / 255);
@@ -610,7 +668,7 @@ int find_threshold(cv::Mat src, bool bground) {
 		std::cout << "percentage is " << percentage << std::endl;
 		if (percentage > 0.25 && !bground)
 			return threshold;
-		if (percentage > 0.30 && bground)
+		if (percentage > 0.25 && bground)
 			return threshold;
 	}
 }

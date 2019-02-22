@@ -2,11 +2,17 @@ data/
 build/
 image/
 metadata/
+histeq/
 chips/
 segs/
 dnns/
 facades/
 segsColor/
 D4/
+D2/
+D3/
+histeq/
+chipshist/
+facadeshist/
 thresholds.txt
 grounds.txt
