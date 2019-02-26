@@ -268,7 +268,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// reshape the chip and pick the representative one
 	double ratio_width, ratio_height;
 	// image relative name
-	std::size_t found = img_name.find_first_of("image/");
+	std::size_t found = img_name.find("image/");
 	if (found < 0) {
 		std::cout << "found failed!!!" << std::endl;
 		return;
@@ -293,7 +293,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::Scalar value(0, 0, 0);
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		croppedImage = dst_chip;
-		cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 2) {
 		src_chip = cv::imread(img_name);
@@ -313,7 +313,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		// crop 30 * 30
 		croppedImage = dst_chip(cv::Rect(dst_chip.size().width * 0.1, 0, dst_chip.size().width / times, dst_chip.size().height));
-		cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 3) {
 		src_chip = cv::imread(img_name);
@@ -333,7 +333,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		// crop 30 * 30
 		croppedImage = dst_chip(cv::Rect(0, dst_chip.size().height * (times - 1) / times, dst_chip.size().width, dst_chip.size().height / times));
-		cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 4) {
 		src_chip = cv::imread(img_name);
@@ -359,7 +359,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
 			double padding_height_ratio = (1 - target_ratio_height) * 0.5;
 			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+			cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 		}
 		else {
 			double target_ratio_width = target_width / facChip_size[0];
@@ -367,7 +367,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
 			double padding_height_ratio = (1 - target_ratio_height);
 			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::imwrite(chips_folder + "/" + img_name.substr(found + 1), croppedImage);
+			cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 		}
 	}
 	else {
@@ -375,9 +375,9 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	// for debugging
 	if (bDebug) {
-		cv::imwrite(facades_folder + "/" + img_name.substr(found + 1), src_chip);
-		cv::Mat img_histeq = cv::imread("../histeq/"+ img_name.substr(found + 1));
-		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found + 1), img_histeq);
+		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
+		cv::Mat img_histeq = cv::imread("../histeq/"+ img_name.substr(found));
+		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found), img_histeq);
 	}
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
@@ -394,18 +394,18 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	int threshold = find_threshold(src, bground);
 	if (bDebug) {
 		std::ofstream out_param(thresholds_file, std::ios::app);
-		out_param << img_name.substr(found + 1);
+		out_param << img_name.substr(found);
 		out_param << ",";
 		out_param << threshold;
 		out_param << "\n";
 
 		std::ofstream out_param_ground(grounds_file, std::ios::app);
-		out_param_ground << img_name.substr(found + 1);
+		out_param_ground << img_name.substr(found);
 		out_param_ground << ",";
 		out_param_ground << bground;
 		out_param_ground << "\n";
 
-		cv::imwrite(chipshist_folder + "/" + img_name.substr(found + 1), dst_ehist);
+		cv::imwrite(chipshist_folder + "/" + img_name.substr(found), dst_ehist);
 	}
 	
 	cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
@@ -510,13 +510,16 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 				}
 			}
 		}
-		win_avg_color.val[0] = win_avg_color.val[0] / win_count;
-		win_avg_color.val[1] = win_avg_color.val[1] / win_count;
-		win_avg_color.val[2] = win_avg_color.val[2] / win_count;
-
-		bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
-		bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
-		bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+		if (win_count > 0) {
+			win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+			win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+			win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+		}
+		if (bg_count > 0) {
+			bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+			bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+		}
 	}
 	// write back to json file
 	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
@@ -587,7 +590,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	cv::resize(syn_img, syn_img, src.size());
 	cv::resize(dnn_img, dnn_img, src.size());
 	if (bDebug)
-		cv::imwrite(segs_folder + "/" + img_name.substr(found + 1), dnn_img);
+		cv::imwrite(segs_folder + "/" + img_name.substr(found), dnn_img);
 	for (int i = 0; i < syn_img.size().height; i++) {
 		for (int j = 0; j < syn_img.size().width; j++) {
 			if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
@@ -603,7 +606,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		}
 	}
 	if (bDebug)
-		cv::imwrite(dnns_folder + "/" + img_name.substr(found + 1), syn_img);
+		cv::imwrite(dnns_folder + "/" + img_name.substr(found), syn_img);
 
 	for (int i = 0; i < dnn_img.size().height; i++) {
 		for (int j = 0; j < dnn_img.size().width; j++) {
@@ -620,7 +623,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		}
 	}
 	if (bDebug)
-		cv::imwrite(segs_color_folder + "/" + img_name.substr(found + 1), dnn_img);
+		cv::imwrite(segs_color_folder + "/" + img_name.substr(found), dnn_img);
 }
 
 std::vector<string> get_all_files_names_within_folder(std::string folder)
