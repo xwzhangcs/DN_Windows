@@ -88,17 +88,15 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	/// Load an image
-	eval_different_segs("../data/results.txt");
-	//eval_segmented_gt("../data/test_seg_thre.png", "../data/test_gt.png");
-	//facade_clustering_spectral("../data/test.png", "../data/test_seg.png", "../data/test_color.png", 2);
-	return 0;
 	std::string path(argv[1]);
-	std::vector<std::string> metaFiles = get_all_files_names_within_folder(path);
-	for (int i = 0; i < metaFiles.size(); i++) {
-		std::string metajason = path + "/" + metaFiles[i];
-		std::cout << metajason << std::endl;
-		process_single_chip(metajason, argv[2]);
+	std::vector<std::string> clusters = get_all_files_names_within_folder(path);
+	for (int i = 0; i < clusters.size(); i++) {
+		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
+		for (int j = 0; j < metaFiles.size(); j++) {
+			std::string metajason = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+			std::cout << metajason << std::endl;
+			process_single_chip(metajason, argv[2]);
+		}
 	}
 	return 0;
 }
@@ -287,12 +285,12 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// reshape the chip and pick the representative one
 	double ratio_width, ratio_height;
 	// image relative name
-	std::size_t found = img_name.find("image/");
+	std::size_t found = img_name.find("chip/");
 	if (found < 0) {
 		std::cout << "found failed!!!" << std::endl;
 		return;
 	}
-	found = found + 6;
+	found = found + 5;
 	cv::Mat src_chip, dst_chip, croppedImage;
 	if (bDebug)
 		std::cout << "type is " << type << std::endl;
@@ -395,7 +393,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// for debugging
 	if (bDebug) {
 		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
-		cv::Mat img_histeq = cv::imread("../histeq/"+ img_name.substr(found));
+		cv::Mat img_histeq = cv::imread(img_name.substr(0, found-5) + "histeq/"+ img_name.substr(found));
+		std::cout << "histeq file is " << img_name.substr(0, found - 5) + "histeq/" + img_name.substr(found) << std::endl;
 		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found), img_histeq);
 	}
 	// load image
@@ -1108,7 +1107,7 @@ int find_threshold(cv::Mat src, bool bground) {
 			}
 		}
 		float percentage = count * 1.0 / (dst.size().height * dst.size().width);
-		std::cout << "percentage is " << percentage << std::endl;
+		//std::cout << "percentage is " << percentage << std::endl;
 		if (percentage > 0.25 && !bground)
 			return threshold;
 		if (percentage > 0.25 && bground)
