@@ -3,7 +3,7 @@ project(dn_lego_syn)
 
 set(CMAKE_BUILD_TYPE Release)
 find_package(Torch REQUIRED)
-find_package( OpenCV REQUIRED )
+find_package(OpenCV REQUIRED)
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 include_directories("D:\\DN_Windows\\include\\")
 
