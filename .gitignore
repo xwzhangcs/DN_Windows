@@ -5,7 +5,8 @@ metadata/
 histeq/
 chips/
 segs/
-dnns/
+dnnsIn/
+dnnsOut/
 facades/
 segsColor/
 D4/

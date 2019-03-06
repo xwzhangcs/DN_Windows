@@ -75,6 +75,7 @@ std::string readStringValue(const rapidjson::Value& node, const char* key) {
 void process_single_chip(std::string metajson, std::string modeljson);
 
 void facade_clustering_kkmeans(std::string in_img_file, std::string seg_img_file, std::string color_img_file, int clusters);
+cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters);
 void facade_clustering_spectral(std::string in_img_file, std::string seg_img_file, std::string color_img_file, int clusters);
 void eval_dataset_postprocessing(std::string label_img);
 std::vector<double> eval_segmented_gt(std::string seg_img_file, std::string gt_img_file);
@@ -88,6 +89,8 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	//process_single_chip("output/D4/cgv_r/0062/metadata/0062_0009.json", argv[2]);
+	//return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(path);
 	for (int i = 0; i < clusters.size(); i++) {
@@ -120,19 +123,19 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// first decide whether it's a valid chip
 	bool bvalid = false;
 	int type = 0;
-	if (facChip_size[0] < 30.0 && facChip_size[0] > 8.0 && facChip_size[1] < 30.0 && facChip_size[1] > 8.0 && score > 0.95) {
+	if (facChip_size[0] < 30.0 && facChip_size[0] > 10.0 && facChip_size[1] < 30.0 && facChip_size[1] > 10.0 && score > 0.95) {
 		type = 1;
 		bvalid = true;
 	}
-	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 8.0 && score > 0.9) {
+	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 10.0 && score > 0.95) {
 		type = 2;
 		bvalid = true;
 	}
-	else if (facChip_size[0] < 30.0 && facChip_size[0] > 8.0 && facChip_size[1] > 30.0 && score > 0.9) {
+	else if (facChip_size[0] < 30.0 && facChip_size[0] > 10.0 && facChip_size[1] > 30.0 && score > 0.95) {
 		type = 3;
 		bvalid = true;
 	}
-	else if (facChip_size[0] > 30.0 && facChip_size[1] > 30.0 && score > 0.7) {
+	else if (facChip_size[0] > 30.0 && facChip_size[1] > 30.0 && score > 0.85) {
 		type = 4;
 		bvalid = true;
 	}
@@ -271,7 +274,9 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// get segs folder path
 	std::string segs_color_folder = readStringValue(docModel, "segsColorFolder");
 	// get dnn folder path
-	std::string dnns_folder = readStringValue(docModel, "dnnsFolder");
+	std::string dnnsIn_folder = readStringValue(docModel, "dnnsInFolder");
+	// get dnn folder path
+	std::string dnnsOut_folder = readStringValue(docModel, "dnnsOutFolder");
 	// get threshold path
 	std::string thresholds_file = readStringValue(docModel, "thresholds");
 	// get ground info
@@ -296,6 +301,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		std::cout << "type is " << type << std::endl;
 	if (type == 1) {
 		src_chip = cv::imread(img_name);
+		std::cout << "image name is " << img_name << std::endl;
 		ratio_width = target_width / facChip_size[0] - 1;
 		ratio_height = target_height / facChip_size[1] - 1;
 		if (bDebug) {
@@ -310,7 +316,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::Scalar value(0, 0, 0);
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		croppedImage = dst_chip;
-		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 2) {
 		src_chip = cv::imread(img_name);
@@ -330,7 +335,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		// crop 30 * 30
 		croppedImage = dst_chip(cv::Rect(dst_chip.size().width * 0.1, 0, dst_chip.size().width / times, dst_chip.size().height));
-		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 3) {
 		src_chip = cv::imread(img_name);
@@ -350,7 +354,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);
 		// crop 30 * 30
 		croppedImage = dst_chip(cv::Rect(0, dst_chip.size().height * (times - 1) / times, dst_chip.size().width, dst_chip.size().height / times));
-		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 	}
 	else if (type == 4) {
 		src_chip = cv::imread(img_name);
@@ -376,7 +379,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
 			double padding_height_ratio = (1 - target_ratio_height) * 0.5;
 			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 		}
 		else {
 			double target_ratio_width = target_width / facChip_size[0];
@@ -384,18 +386,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
 			double padding_height_ratio = (1 - target_ratio_height);
 			croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
 		}
 	}
 	else {
 		// do nothing
-	}
-	// for debugging
-	if (bDebug) {
-		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
-		cv::Mat img_histeq = cv::imread(img_name.substr(0, found-5) + "histeq/"+ img_name.substr(found));
-		std::cout << "histeq file is " << img_name.substr(0, found - 5) + "histeq/" + img_name.substr(found) << std::endl;
-		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found), img_histeq);
 	}
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
@@ -408,25 +402,17 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	for (int i = 0; i < 3; i++)
 		cv::equalizeHist(bgr[i], bgr[i]);
 	dst_ehist = bgr[2];
+	int threshold = 0;
 	// threshold classification
-	int threshold = find_threshold(src, bground);
-	if (bDebug) {
-		std::ofstream out_param(thresholds_file, std::ios::app);
-		out_param << img_name.substr(found);
-		out_param << ",";
-		out_param << threshold;
-		out_param << "\n";
-
-		std::ofstream out_param_ground(grounds_file, std::ios::app);
-		out_param_ground << img_name.substr(found);
-		out_param_ground << ",";
-		out_param_ground << bground;
-		out_param_ground << "\n";
-
-		cv::imwrite(chipshist_folder + "/" + img_name.substr(found), dst_ehist);
+	if(false)
+	{
+		int threshold = find_threshold(src, bground);
+		cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
 	}
-	
-	cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
+	else { // kkmeans 
+		int clusters = 3;
+		dst_classify = facade_clustering_kkmeans(dst_ehist, 3);
+	}
 	// generate input image for DNN
 	cv::Scalar bg_color(255, 255, 255); // white back ground
 	cv::Scalar window_color(0, 0, 0); // black for windows
@@ -500,11 +486,71 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		paras.push_back(out_tensor.slice(1, i, i + 1).item<float>());
 	}
 	// adjust paras
+	bool bInvalidDnn = false;
 	for (int i = 0; i < num_paras; i++) {
 		if (paras[i] > 1.0)
 			paras[i] = 1.0;
-		if (paras[i] < 0.0)
+		if (paras[i] < 0.0) {
+			if (i != 2) {
+				bInvalidDnn = true;
+			}
 			paras[i] = 0.0;
+		}
+	}
+	if (bInvalidDnn)
+		bvalid = false;
+	if (!bvalid) {
+		// write back to json file
+		fp = fopen(metajson.c_str(), "wb"); // non-Windows use "w"
+		rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
+		doc.AddMember("valid", bvalid, alloc);
+		// compute avg color
+		cv::Scalar avg_color(0, 0, 0);
+		cv::Mat src = cv::imread(img_name, 1);
+		for (int i = 0; i < src.size().height; i++) {
+			for (int j = 0; j < src.size().width; j++) {
+				avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
+				avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
+				avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+			}
+		}
+		avg_color.val[0] = avg_color.val[0] / (src.size().height * src.size().width);
+		avg_color.val[1] = avg_color.val[1] / (src.size().height * src.size().width);
+		avg_color.val[2] = avg_color.val[2] / (src.size().height * src.size().width);
+
+		rapidjson::Value avg_color_json(rapidjson::kArrayType);
+		avg_color_json.PushBack(avg_color.val[0], alloc);
+		avg_color_json.PushBack(avg_color.val[1], alloc);
+		avg_color_json.PushBack(avg_color.val[2], alloc);
+		doc.AddMember("bg_color", avg_color_json, alloc);
+
+		char writeBuffer[10240];
+		rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+		rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+		doc.Accept(writer);
+		fclose(fp);
+		return;
+	}
+	// for debugging
+	if (bDebug && !bInvalidDnn) {
+		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
+		cv::Mat img_histeq = cv::imread(img_name.substr(0, found - 5) + "histeq/" + img_name.substr(found));
+		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found), img_histeq);
+
+		std::ofstream out_param(thresholds_file, std::ios::app);
+		out_param << img_name.substr(found);
+		out_param << ",";
+		out_param << threshold;
+		out_param << "\n";
+
+		std::ofstream out_param_ground(grounds_file, std::ios::app);
+		out_param_ground << img_name.substr(found);
+		out_param_ground << ",";
+		out_param_ground << bground;
+		out_param_ground << "\n";
+
+		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
+		cv::imwrite(chipshist_folder + "/" + img_name.substr(found), dst_ehist);
 	}
 	// find the average color for window/non-window
 	cv::Scalar bg_avg_color(0, 0, 0);
@@ -607,7 +653,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// recover to the original image
 	cv::resize(syn_img, syn_img, src.size());
 	cv::resize(dnn_img, dnn_img, src.size());
-	if (bDebug)
+	if (bDebug && !bInvalidDnn)
 		cv::imwrite(segs_folder + "/" + img_name.substr(found), dst_classify);
 	for (int i = 0; i < syn_img.size().height; i++) {
 		for (int j = 0; j < syn_img.size().width; j++) {
@@ -623,25 +669,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			}
 		}
 	}
-	if (bDebug)
-		cv::imwrite(dnns_folder + "/" + img_name.substr(found), syn_img);
-
-	for (int i = 0; i < dnn_img.size().height; i++) {
-		for (int j = 0; j < dnn_img.size().width; j++) {
-			if (dnn_img.at<cv::Vec3b>(i, j)[0] == 0) {
-				dnn_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
-				dnn_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
-				dnn_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
-			}
-			else {
-				dnn_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
-				dnn_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
-				dnn_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
-			}
-		}
+	if (bDebug && !bInvalidDnn) {
+		cv::imwrite(dnnsOut_folder + "/" + img_name.substr(found), syn_img);
+		cv::imwrite(dnnsIn_folder + "/" + img_name.substr(found), dnn_img);
 	}
-	if (bDebug)
-		cv::imwrite(segs_color_folder + "/" + img_name.substr(found), dnn_img);
 }
 
 std::vector<double> eval_segmented_gt(std::string seg_img_file, std::string gt_img_file) {
@@ -910,6 +941,166 @@ void facade_clustering_kkmeans(std::string in_img_file, std::string seg_img_file
 		}
 	}
 	imwrite(seg_img_file, out_img);
+}
+
+cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
+	// Here we declare that our samples will be 2 dimensional column vectors.  
+	// (Note that if you don't know the dimensionality of your vectors at compile time
+	// you can change the 2 to a 0 and then set the size at runtime)
+	typedef matrix<double, 0, 1> sample_type;
+	std::cout << "src_img channels is " << src_img.channels() << std::endl;
+	// Now we are making a typedef for the kind of kernel we want to use.  I picked the
+	// radial basis kernel because it only has one parameter and generally gives good
+	// results without much fiddling.
+	typedef radial_basis_kernel<sample_type> kernel_type;
+
+
+	// Here we declare an instance of the kcentroid object.  It is the object used to 
+	// represent each of the centers used for clustering.  The kcentroid has 3 parameters 
+	// you need to set.  The first argument to the constructor is the kernel we wish to 
+	// use.  The second is a parameter that determines the numerical accuracy with which 
+	// the object will perform part of the learning algorithm.  Generally, smaller values 
+	// give better results but cause the algorithm to attempt to use more dictionary vectors 
+	// (and thus run slower and use more memory).  The third argument, however, is the 
+	// maximum number of dictionary vectors a kcentroid is allowed to use.  So you can use
+	// it to control the runtime complexity.  
+	kcentroid<kernel_type> kc(kernel_type(0.1), 0.01, 16);
+
+	// Now we make an instance of the kkmeans object and tell it to use kcentroid objects
+	// that are configured with the parameters from the kc object we defined above.
+	kkmeans<kernel_type> test(kc);
+
+	std::vector<sample_type> samples;
+	std::vector<sample_type> initial_centers;
+
+	sample_type m(src_img.channels());
+
+	for (int i = 0; i < src_img.size().height; i++) {
+		for (int j = 0; j < src_img.size().width; j++) {
+			if (src_img.channels() == 3) {
+				m(0) = src_img.at<cv::Vec3b>(i, j)[0] * 1.0 / 255;
+				m(1) = src_img.at<cv::Vec3b>(i, j)[1] * 1.0 / 255;
+				m(2) = src_img.at<cv::Vec3b>(i, j)[2] * 1.0 / 255;
+			}
+			else {
+				m(0) = (int)src_img.at<uchar>(i, j) * 1.0 / 255;
+			}
+			// add this sample to our set of samples we will run k-means 
+			samples.push_back(m);
+		}
+	}
+
+	// tell the kkmeans object we made that we want to run k-means with k set to 3. 
+	// (i.e. we want 3 clusters)
+	test.set_number_of_centers(clusters);
+
+	// You need to pick some initial centers for the k-means algorithm.  So here
+	// we will use the dlib::pick_initial_centers() function which tries to find
+	// n points that are far apart (basically).  
+	pick_initial_centers(clusters, initial_centers, samples, test.get_kernel());
+
+	// now run the k-means algorithm on our set of samples.  
+	test.train(samples, initial_centers);
+
+	std::vector<cv::Scalar> clusters_colors;
+	std::vector<int> clusters_points;
+	clusters_colors.resize(clusters);
+	clusters_points.resize(clusters);
+	for (int i = 0; i < clusters; i++) {
+		clusters_colors[i] = cv::Scalar(0, 0, 0);
+		clusters_points[i] = 0;
+	}
+	int count = 0;
+	// 
+	if (src_img.channels() == 3) {
+		count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += src_img.at<cv::Vec3b>(i, j)[0];
+				clusters_colors[test(samples[count])][1] += src_img.at<cv::Vec3b>(i, j)[1];
+				clusters_colors[test(samples[count])][2] += src_img.at<cv::Vec3b>(i, j)[2];
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+			clusters_colors[i][1] = clusters_colors[i][1] / clusters_points[i];
+			clusters_colors[i][2] = clusters_colors[i][2] / clusters_points[i];
+		}
+	}
+	else if (src_img.channels() == 1) { //gray image
+		int count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += (int)src_img.at<uchar>(i, j);
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+		}
+	}
+	else {
+		//do nothing
+	}
+	// compute cluster colors
+	int darkest_cluster = -1;
+	cv::Scalar darkest_color(255, 255, 255);
+	for (int i = 0; i < clusters; i++) {
+		std::cout << "clusters_colors " << i << " is " << clusters_colors[i] << std::endl;
+		if (src_img.channels() == 3) {
+			if (clusters_colors[i][0] < darkest_color[0] && clusters_colors[i][1] < darkest_color[1] && clusters_colors[i][2] < darkest_color[2]) {
+				darkest_color[0] = clusters_colors[i][0];
+				darkest_color[1] = clusters_colors[i][1];
+				darkest_color[2] = clusters_colors[i][2];
+				darkest_cluster = i;
+			}
+		}
+		else {
+			if (clusters_colors[i][0] < darkest_color[0]) {
+				darkest_color[0] = clusters_colors[i][0];
+				darkest_cluster = i;
+			}
+		}
+	}
+	cv::Mat out_img;
+	cv::resize(src_img, out_img, cv::Size(src_img.size().width, src_img.size().height));
+	count = 0;
+	if (src_img.channels() == 1) {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<uchar>(i, j) = (uchar)0;
+				}
+				else {
+					out_img.at<uchar>(i, j) = (uchar)255;
+
+				}
+				count++;
+			}
+		}
+	}
+	else {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<cv::Vec3b>(i, j)[0] = 0;
+					out_img.at<cv::Vec3b>(i, j)[1] = 0;
+					out_img.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+				else {
+					out_img.at<cv::Vec3b>(i, j)[0] = 255;
+					out_img.at<cv::Vec3b>(i, j)[1] = 255;
+					out_img.at<cv::Vec3b>(i, j)[2] = 255;
+
+				}
+				count++;
+			}
+		}
+	}
+	return out_img;
 }
 
 void facade_clustering_spectral(std::string in_img_file, std::string seg_img_file, std::string color_img_file, int clusters) {
