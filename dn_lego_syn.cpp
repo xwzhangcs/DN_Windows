@@ -89,7 +89,8 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//process_single_chip("output/D4/cgv_r/0062/metadata/0062_0009.json", argv[2]);
+	//process_single_chip("output/D4/cgv_r/0001/metadata/0001_0022.json", argv[2]);
+	//facade_clustering_kkmeans("../data/0001_0.9954_0022_15JAN21161308.png", "../data/a.png", "../data/b.png", 2);
 	//return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(path);
@@ -123,15 +124,15 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// first decide whether it's a valid chip
 	bool bvalid = false;
 	int type = 0;
-	if (facChip_size[0] < 30.0 && facChip_size[0] > 10.0 && facChip_size[1] < 30.0 && facChip_size[1] > 10.0 && score > 0.95) {
+	if (facChip_size[0] < 30.0 && facChip_size[0] > 15.0 && facChip_size[1] < 30.0 && facChip_size[1] > 15.0 && score > 0.95) {
 		type = 1;
 		bvalid = true;
 	}
-	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 10.0 && score > 0.95) {
+	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 13.0 && score > 0.95) {
 		type = 2;
 		bvalid = true;
 	}
-	else if (facChip_size[0] < 30.0 && facChip_size[0] > 10.0 && facChip_size[1] > 30.0 && score > 0.95) {
+	else if (facChip_size[0] < 30.0 && facChip_size[0] > 13.0 && facChip_size[1] > 30.0 && score > 0.95) {
 		type = 3;
 		bvalid = true;
 	}
@@ -411,7 +412,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	else { // kkmeans 
 		int clusters = 3;
-		dst_classify = facade_clustering_kkmeans(dst_ehist, 3);
+		dst_classify = facade_clustering_kkmeans(dst_ehist, clusters);
 	}
 	// generate input image for DNN
 	cv::Scalar bg_color(255, 255, 255); // white back ground
@@ -424,7 +425,7 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		for (int j = 0; j < scale_img.size().width; j++) {
 			//noise
 			if ((int)scale_img.at<uchar>(i, j) < 255) {
-				scale_img.at<uchar>(i, j) = 0;
+				scale_img.at<uchar>(i, j) = (uchar)0;
 			}
 		}
 	}
@@ -465,6 +466,8 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		//	4,
 		//	window_color);
 	}
+	dnn_img = scale_img.clone();
+	cv::cvtColor(dnn_img, dnn_img, CV_GRAY2BGR);
 	// remove padding
 	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
 
