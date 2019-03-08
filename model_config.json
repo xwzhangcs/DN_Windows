@@ -15,15 +15,13 @@
 		"rangeOfDoors":[2,6]
 	},
 	"facadesFolder":"../facades",
-	"facadehistFolder":"../facadeshist",
 	"chipsFolder":"../chips",
-	"chiphistFolder":"../chipshist",
 	"segsFolder":"../segs",
-	"segsColorFolder":"../segsColor",
+	"resizesFolder":"../resizes",
+	"dilatesFolder":"../dilates",
+	"alignsFolder":"../aligns",
 	"dnnsInFolder":"../dnnsIn",
 	"dnnsOutFolder":"../dnnsOut",
-	"thresholds":"../thresholds.txt",
-	"grounds":"../grounds.txt",
 	"debug":true,
 	"defaultSize":[224, 224],
 	"targetChipSize":[30.0, 30.0]

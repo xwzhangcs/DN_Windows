@@ -5,6 +5,9 @@ metadata/
 histeq/
 chips/
 segs/
+resizes/
+dilates/
+aligns/
 dnnsIn/
 dnnsOut/
 facades/

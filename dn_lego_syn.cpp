@@ -79,17 +79,18 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters);
 void facade_clustering_spectral(std::string in_img_file, std::string seg_img_file, std::string color_img_file, int clusters);
 void eval_dataset_postprocessing(std::string label_img);
 std::vector<double> eval_segmented_gt(std::string seg_img_file, std::string gt_img_file);
-std::vector<double> eval_synthesis_gt(std::string seg_img_file, std::string gt_img_file);
 
 void eval_different_segs(std::string result_file);
 void create_different_segs();
+
+float findSkewAngle(cv::Mat src_img);
 
 int main(int argc, const char* argv[]) {
 	if (argc != 3) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//process_single_chip("output/D4/cgv_r/0001/metadata/0001_0022.json", argv[2]);
+	process_single_chip("output/D4/cgv_r/0001/metadata/0001_0017.json", argv[2]);
 	//facade_clustering_kkmeans("../data/0001_0.9954_0022_15JAN21161308.png", "../data/a.png", "../data/b.png", 2);
 	//return 0;
 	std::string path(argv[1]);
@@ -264,24 +265,20 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	double target_height = tmp_array[1];
 	// get facade folder path
 	std::string facades_folder = readStringValue(docModel, "facadesFolder");
-	// get facadehist folder path
-	std::string facadeshist_folder = readStringValue(docModel, "facadehistFolder");
 	// get chips folder path
 	std::string chips_folder = readStringValue(docModel, "chipsFolder");
-	// get chiphist folder path
-	std::string chipshist_folder = readStringValue(docModel, "chiphistFolder");
 	// get segs folder path
 	std::string segs_folder = readStringValue(docModel, "segsFolder");
 	// get segs folder path
-	std::string segs_color_folder = readStringValue(docModel, "segsColorFolder");
+	std::string resizes_folder = readStringValue(docModel, "resizesFolder");
+	// get dilates folder path
+	std::string dilates_folder = readStringValue(docModel, "dilatesFolder");
+	// get aligns folder path
+	std::string aligns_folder = readStringValue(docModel, "alignsFolder");
 	// get dnn folder path
 	std::string dnnsIn_folder = readStringValue(docModel, "dnnsInFolder");
 	// get dnn folder path
 	std::string dnnsOut_folder = readStringValue(docModel, "dnnsOutFolder");
-	// get threshold path
-	std::string thresholds_file = readStringValue(docModel, "thresholds");
-	// get ground info
-	std::string grounds_file = readStringValue(docModel, "grounds");
 	fclose(fp);
 	// Deserialize the ScriptModule from a file using torch::jit::load().
 	std::shared_ptr<torch::jit::script::Module> module = torch::jit::load(model_name);
@@ -358,21 +355,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	else if (type == 4) {
 		src_chip = cv::imread(img_name);
-		/*int times_width = ceil(facChip_size[0] / target_width);
-		int times_height = ceil(facChip_size[1] / target_height);
-		ratio_width = (times_width * target_width - facChip_size[0]) / facChip_size[0];
-		ratio_height = (times_height * target_height - facChip_size[1]) / facChip_size[1];
-		if (bDebug) {
-			std::cout << "ratio_width is " << ratio_width << std::endl;
-			std::cout << "ratio_height is " << ratio_height << std::endl;
-		}
-		int top = (int)(ratio_height * src_chip.rows);
-		int bottom = 0;
-		int left = 0;
-		int right = (int)(ratio_width * src_chip.cols);
-		int borderType = cv::BORDER_REFLECT_101;
-		cv::Scalar value(0, 0, 0);
-		cv::copyMakeBorder(src_chip, dst_chip, top, bottom, left, right, borderType, value);*/
 		// crop 30 * 30
 		if (!bground) {
 			double target_ratio_width = target_width / facChip_size[0];
@@ -394,7 +376,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	}
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
-	//src = cv::imread(img_name, 1);
 	src = croppedImage;
 	cv::Mat hsv;
 	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
@@ -424,50 +405,67 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	for (int i = 0; i < scale_img.size().height; i++) {
 		for (int j = 0; j < scale_img.size().width; j++) {
 			//noise
-			if ((int)scale_img.at<uchar>(i, j) < 255) {
+			if ((int)scale_img.at<uchar>(i, j) < 128) {
 				scale_img.at<uchar>(i, j) = (uchar)0;
 			}
 		}
 	}
+
+	// dilate to remove noises
+	int dilation_type = cv::MORPH_RECT;
+	cv::Mat dilation_dst;
+	int kernel_size = 5;
+	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+	/// Apply the dilation operation
+	cv::dilate(scale_img, dilation_dst, element);
+
+	// alignment
+	float angle = findSkewAngle(dilation_dst);
+	if (bDebug)
+		std::cout << "angle is " << angle << std::endl;
+	// rotate the image
+	cv::Mat aligned_img;
+	cv::Point2f offset(dilation_dst.cols / 2, dilation_dst.rows / 2);
+	cv::Mat rot_mat = cv::getRotationMatrix2D(offset, angle, 1.0);
+	cv::warpAffine(dilation_dst, aligned_img, rot_mat, dilation_dst.size(), cv::INTER_CUBIC, cv::BORDER_REPLICATE);
+	
 	// add padding
 	int padding_size = 5;
 	int borderType = cv::BORDER_CONSTANT;
 	cv::Scalar value(255, 255, 255);
-	cv::Mat grid_dst;
-	cv::copyMakeBorder(scale_img, scale_img, padding_size, padding_size, padding_size, padding_size, borderType, value);
+	cv::Mat aligned_img_padding;
+	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
 
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
-	cv::findContours(scale_img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
 
 	std::vector<cv::Rect> boundRect(contours.size());
-	std::vector<cv::RotatedRect> minRect(contours.size());
 	for (int i = 0; i < contours.size(); i++)
 	{
 		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
-		minRect[i] = minAreaRect(cv::Mat(contours[i]));
 	}
-	cv::Mat dnn_img(scale_img.size(), CV_8UC3, bg_color);
+	cv::Mat dnn_img(aligned_img_padding.size(), CV_8UC3, bg_color);
 	for (int i = 1; i< contours.size(); i++)
 	{
-		//if (hierarchy[i][2] != -1) continue;
 		if (hierarchy[i][3] != 0) continue;
-		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
-		//cv::Point2f rect_points[4];
-		//minRect[i].points(rect_points);
-		//cv::Point vertices[4];
-		//for (int i = 0; i < 4; ++i) {
-		//	vertices[i] = rect_points[i];
-		//}
-		//for (int j = 0; j < 4; j++)
-		//line(dnn_img, rect_points[j], rect_points[(j + 1) % 4], color, 1, 8);
-		//cv::fillConvexPoly(dnn_img,
-		//	vertices,
-		//	4,
-		//	window_color);
+		// check the validity of the rect
+		float area_contour = cv::contourArea(contours[i]);
+		float area_rect = boundRect[i].width * boundRect[i].height;
+		if (area_rect < 10) continue;
+		if (area_rect < 100) {
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+			continue;
+		}
+		float ratio = area_contour / area_rect;
+		int tmp = 0;
+		while (ratio < 0.5 && (boundRect[i].height - tmp) > 0) {
+			area_rect = boundRect[i].width * (boundRect[i].height - tmp);
+			ratio = area_contour / area_rect;
+			tmp += 2;
+		}
+		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y + tmp / 2), cv::Point(boundRect[i].br().x, boundRect[i].br().y - tmp / 2), window_color, -1);
 	}
-	dnn_img = scale_img.clone();
-	cv::cvtColor(dnn_img, dnn_img, CV_GRAY2BGR);
 	// remove padding
 	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
 
@@ -500,8 +498,10 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 			paras[i] = 0.0;
 		}
 	}
-	if (bInvalidDnn)
-		bvalid = false;
+	/*if (bInvalidDnn)
+		bvalid = false;*/
+	bInvalidDnn = false;
+	//
 	if (!bvalid) {
 		// write back to json file
 		fp = fopen(metajson.c_str(), "wb"); // non-Windows use "w"
@@ -537,23 +537,11 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	// for debugging
 	if (bDebug && !bInvalidDnn) {
 		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
-		cv::Mat img_histeq = cv::imread(img_name.substr(0, found - 5) + "histeq/" + img_name.substr(found));
-		cv::imwrite(facadeshist_folder + "/" + img_name.substr(found), img_histeq);
-
-		std::ofstream out_param(thresholds_file, std::ios::app);
-		out_param << img_name.substr(found);
-		out_param << ",";
-		out_param << threshold;
-		out_param << "\n";
-
-		std::ofstream out_param_ground(grounds_file, std::ios::app);
-		out_param_ground << img_name.substr(found);
-		out_param_ground << ",";
-		out_param_ground << bground;
-		out_param_ground << "\n";
-
 		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
-		cv::imwrite(chipshist_folder + "/" + img_name.substr(found), dst_ehist);
+		cv::imwrite(segs_folder + "/" + img_name.substr(found), dst_classify);
+		cv::imwrite(resizes_folder + "/" + img_name.substr(found), scale_img);
+		cv::imwrite(dilates_folder + "/" + img_name.substr(found), dilation_dst);
+		cv::imwrite(aligns_folder + "/" + img_name.substr(found), aligned_img);
 	}
 	// find the average color for window/non-window
 	cv::Scalar bg_avg_color(0, 0, 0);
@@ -655,9 +643,6 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 
 	// recover to the original image
 	cv::resize(syn_img, syn_img, src.size());
-	cv::resize(dnn_img, dnn_img, src.size());
-	if (bDebug && !bInvalidDnn)
-		cv::imwrite(segs_folder + "/" + img_name.substr(found), dst_classify);
 	for (int i = 0; i < syn_img.size().height; i++) {
 		for (int j = 0; j < syn_img.size().width; j++) {
 			if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
@@ -1307,6 +1292,46 @@ int find_threshold(cv::Mat src, bool bground) {
 		if (percentage > 0.25 && bground)
 			return threshold;
 	}
+}
+
+float findSkewAngle(cv::Mat src_img) {
+	// add padding
+	int padding_size = 5;
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Scalar value(255, 255, 255);
+	cv::Mat src_padding;
+	cv::copyMakeBorder(src_img, src_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(src_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	/// Find the rotated rectangles and ellipses for each contour
+	std::vector<cv::RotatedRect> minRect(contours.size());
+	std::vector<cv::RotatedRect> minEllipse(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		if (hierarchy[i][3] != 0) continue;
+		minRect[i] = cv::minAreaRect(cv::Mat(contours[i]));
+	}
+	std::vector<float> angles;
+	for (int i = 0; i < contours.size(); i++) {
+		if (hierarchy[i][3] != 0) continue;
+		float tmp = minRect[i].angle;
+		if (tmp < -45.)
+			tmp += 90.;
+		angles.push_back(tmp);
+	}
+	std::sort(angles.begin(), angles.end());
+	float first_q = angles[angles.size() / 4];
+	float median_q = angles[angles.size() / 2];
+	float third_q = angles[3 * angles.size() / 4];
+	/*std::cout << "1 qt Angle is " << first_q << std::endl;
+	std::cout << "Median Angle is " << median_q << std::endl;
+	std::cout << "3 qt Angle is " << third_q << std::endl;*/
+	float threshold = 5;
+	if (abs(first_q - median_q) < threshold && abs(third_q - median_q) < threshold)
+		return median_q;
+	else
+		return 0;
 }
 
 cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight) {

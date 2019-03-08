@@ -1,7 +1,8 @@
 del chips\*.png
-del chipshist\*.png
+del dilates\*.png
 del dnnsIn\*.png
 del dnnsOut\*.png
 del facades\*.png
-del facadeshist\*.png
+del aligns\*.png
 del segs\*.png
+del resizes\*.png
