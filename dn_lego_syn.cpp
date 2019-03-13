@@ -7,12 +7,85 @@ int main(int argc, const char* argv[]) {
 		return -1;
 	}
 	{
-		cv::Mat croppedImage;
-		bool bvalid = chipping("output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], croppedImage, true, "0001_0.9922_0017_15JAN21161308.png");
-		if (bvalid) {
-			cv::Mat dnn_img;
-			segment_chip(croppedImage, dnn_img, "output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], true, "0001_0.9922_0017_15JAN21161308.png");
-			feedDnn(dnn_img, "output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], true, "0001_0.9922_0017_15JAN21161308.png");
+		std::map<std::string, int> mymap;
+		mymap.insert(std::pair<std::string, int>("0001_0017.png", 1));
+		mymap.insert(std::pair<std::string, int>("0001_0018.png", 1));
+		mymap.insert(std::pair<std::string, int>("0001_0022.png", 2));
+		mymap.insert(std::pair<std::string, int>("0001_0042.png", 2));
+		mymap.insert(std::pair<std::string, int>("0001_0051.png", 1));
+
+		mymap.insert(std::pair<std::string, int>("0001_0061.png", 1));
+		mymap.insert(std::pair<std::string, int>("0002_0041.png", 1));
+		mymap.insert(std::pair<std::string, int>("0003_0015.png", 3));
+		mymap.insert(std::pair<std::string, int>("0004_0011.png", 6));
+		mymap.insert(std::pair<std::string, int>("0005_0008.png", 3));
+
+		mymap.insert(std::pair<std::string, int>("0005_0031.png", 1));
+		mymap.insert(std::pair<std::string, int>("0005_0058.png", 1));
+		mymap.insert(std::pair<std::string, int>("0005_0078.png", 1));
+		mymap.insert(std::pair<std::string, int>("0009_0045.png", 5));
+		mymap.insert(std::pair<std::string, int>("0009_0052.png", 5));
+
+		mymap.insert(std::pair<std::string, int>("0010_0031.png", 1));
+		mymap.insert(std::pair<std::string, int>("0011_0045.png", 1));
+		mymap.insert(std::pair<std::string, int>("0013_0005.png", 2));
+		mymap.insert(std::pair<std::string, int>("0013_0013.png", 2));
+		mymap.insert(std::pair<std::string, int>("0015_0017.png", 1));
+
+		mymap.insert(std::pair<std::string, int>("0017_0018.png", 1));
+		mymap.insert(std::pair<std::string, int>("0017_0052.png", 2));
+		mymap.insert(std::pair<std::string, int>("0021_0025.png", 6));
+		mymap.insert(std::pair<std::string, int>("0022_0025.png", 4));
+		mymap.insert(std::pair<std::string, int>("0023_0014.png", 5));
+
+		mymap.insert(std::pair<std::string, int>("0023_0023.png", 5));
+		mymap.insert(std::pair<std::string, int>("0023_0026.png", 1));
+		mymap.insert(std::pair<std::string, int>("0023_0027.png", 5));
+		mymap.insert(std::pair<std::string, int>("0025_0003.png", 2));
+		mymap.insert(std::pair<std::string, int>("0025_0011.png", 2));
+
+		mymap.insert(std::pair<std::string, int>("0032_0016.png", 2));
+		mymap.insert(std::pair<std::string, int>("0033_0009.png", 2));
+		mymap.insert(std::pair<std::string, int>("0033_0010.png", 2));
+		mymap.insert(std::pair<std::string, int>("0033_0021.png", 2));
+		mymap.insert(std::pair<std::string, int>("0037_0004.png", 5));
+
+		mymap.insert(std::pair<std::string, int>("0039_0009.png", 5));
+		mymap.insert(std::pair<std::string, int>("0039_0011.png", 2));
+		mymap.insert(std::pair<std::string, int>("0040_0016.png", 1));
+		mymap.insert(std::pair<std::string, int>("0041_0013.png", 2));
+		mymap.insert(std::pair<std::string, int>("0041_0014.png", 2));
+
+		mymap.insert(std::pair<std::string, int>("0042_0009.png", 1));
+		mymap.insert(std::pair<std::string, int>("0055_0009.png", 1));
+		mymap.insert(std::pair<std::string, int>("0055_0022.png", 1));
+		mymap.insert(std::pair<std::string, int>("0059_0007.png", 1));
+		mymap.insert(std::pair<std::string, int>("0061_0008.png", 1));
+
+		std::string path("../data/test");
+		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
+		for (int i = 0; i < imageFiles.size(); i++) {
+			std::string cluster_id = imageFiles[i].substr(0, imageFiles[i].find("_"));
+			std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
+			int found = tmp.find("_");
+			std::string facade_id = tmp.substr(found + 1, 4);
+			std::string metajason = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
+			std::string img_filename = cluster_id + "_" + facade_id + ".png";
+			std::cout << metajason << ", "<< img_filename << std::endl;
+			cv::Mat croppedImage;
+			bool bvalid = chipping(metajason, argv[3], croppedImage, true, img_filename);
+			if (bvalid) {
+				cv::Mat dnn_img;
+				segment_chip(croppedImage, dnn_img, metajason, argv[3], true, img_filename);
+				int best_class = mymap.at(img_filename);
+				std::cout << "class is " << best_class << std::endl;
+				std::vector<double> predictions = feedDnn(dnn_img, metajason, argv[3], true, img_filename, best_class);
+				std::cout << "predictions size is " << predictions.size() << std::endl;
+				cv::Scalar win_avg_color = readColor(metajason, "window_color");
+				cv::Scalar bg_avg_color = readColor(metajason, "bg_color");
+				synthesis(predictions, croppedImage.size(), "../dnnsOut", win_avg_color, bg_avg_color, img_filename, true);
+
+			}
 		}
 	}
 	return 0;
@@ -244,7 +317,7 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, 
 		// check the validity of the rect
 		float area_contour = cv::contourArea(contours[i]);
 		float area_rect = boundRect[i].width * boundRect[i].height;
-		if (area_rect < 10) continue;
+		if (area_rect < 50 || area_contour < 50) continue;
 		if (area_rect < 100) {
 			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
 			continue;
@@ -316,7 +389,7 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, 
 	return true;
 }
 
-std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
+std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename, int best_class) {
 	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
 	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
@@ -345,10 +418,10 @@ std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string m
 
 	std::vector<torch::jit::IValue> inputs;
 	inputs.push_back(img_tensor);
-	int best_class = 1;
 
 	if(false)
 	{
+		int best_class = 1;
 		// Deserialize the ScriptModule from a file using torch::jit::load().
 		std::shared_ptr<torch::jit::script::Module> classifier_module = torch::jit::load(classifier_name);
 		classifier_module->to(at::kCUDA);
@@ -387,9 +460,12 @@ std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string m
 	for (int i = 0; i < num_paras; i++) {
 		paras.push_back(out_tensor_grammar.slice(1, i, i + 1).item<float>());
 	}
+	for (int i = 0; i < num_paras; i++) {
+		if (paras[i] < 0)
+			paras[i] = 0;
+	}
 	fclose(fp);
 	std::vector<double> predictions;
-	return predictions;
 	if (best_class == 1) {
 		predictions = grammar1(modeljson, paras, bDebug);
 	}
@@ -495,8 +571,12 @@ std::vector<double> grammar1(std::string modeljson, std::vector<double> paras, b
 		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
 	}
 	fclose(fp);
-	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
-	int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		img_rows++;
+	int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
+	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		img_cols++;
 	int img_groups = 1;
 	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = paras[3] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
@@ -554,10 +634,16 @@ std::vector<double> grammar2(std::string modeljson, std::vector<double> paras, b
 		std::cout << "imageDRelativeHeight is " << imageDRelativeHeight.first << ", " << imageDRelativeHeight.second << std::endl;
 	}
 	fclose(fp);
-	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
-	int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		img_rows++;
+	int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
+	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		img_cols++;
 	int img_groups = 1;
-	int img_doors = round(paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	int img_doors = paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first;
+	if (paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		img_doors++;
 	double relative_width = paras[3] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = paras[4] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
 	double relative_door_width = paras[5] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
@@ -595,7 +681,9 @@ std::vector<double> grammar3(std::string modeljson, std::vector<double> paras, b
 	}
 	fclose(fp);
 	int img_rows = 1;
-	int img_cols = round(paras[0] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
+	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		img_cols++;
 	int img_groups = 1;
 	double relative_width = paras[1] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = 1.0;
@@ -644,9 +732,13 @@ std::vector<double> grammar4(std::string modeljson, std::vector<double> paras, b
 	}
 	fclose(fp);
 	int img_rows = 1;;
-	int img_cols = round(paras[0] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
+	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		img_cols ++ ;
 	int img_groups = 1;
-	int img_doors = round(paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
+	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		img_doors++;
 	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = 1.0;
 	double relative_door_width = paras[3] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
@@ -683,7 +775,9 @@ std::vector<double> grammar5(std::string modeljson, std::vector<double> paras, b
 		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
 	}
 	fclose(fp);
-	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		img_rows++;
 	int img_cols = 1;
 	int img_groups = 1;
 	double relative_width = 1.0;
@@ -732,10 +826,14 @@ std::vector<double> grammar6(std::string modeljson, std::vector<double> paras, b
 		std::cout << "imageDRelativeHeight is " << imageDRelativeHeight.first << ", " << imageDRelativeHeight.second << std::endl;
 	}
 	fclose(fp);
-	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		img_rows++;
 	int img_cols = 1;
 	int img_groups = 1;
-	int img_doors = round(paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
+	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		img_doors++;
 	double relative_width = 1.0;
 	double relative_height = paras[2] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
 	double relative_door_width = paras[3] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
