@@ -1,0 +1,113 @@
+{
+	"inputDir": "../CORE3D",
+	"regions": {
+		"D4": {
+			"models": {
+				"cgv_r": {
+					"clusterDir": "2018-09-12/D4/BuildingClusters",
+					"selected": [
+						{ "id":  1, "sat": "15JAN21161308" },
+						{ "id":  2, "sat": "15JAN21161308" },
+						{ "id":  3, "sat": "15JAN21161308" },
+						{ "id":  4, "sat": "15FEB08160130" },
+						{ "id":  5, "sat": "15JAN21161308" },
+						{ "id":  7, "sat": "15JAN21161308" },
+						{ "id":  9, "sat": "15DEC21161108" },
+						{ "id": 10, "sat": "15JAN21161308" },
+						{ "id": 11, "sat": "14OCT30155732" },
+						{ "id": 13, "sat": "14OCT11155720" },
+						{ "id": 15, "sat": "15FEB08160130" },
+						{ "id": 16, "sat": "15JAN21161308" },
+						{ "id": 17, "sat": "15JAN21161308" },
+						{ "id": 21, "sat": "15FEB08160130" },
+						{ "id": 22, "sat": "15JAN21161308" },
+						{ "id": 23, "sat": "15FEB08160130" },
+						{ "id": 25, "sat": "15NOV01162034" },
+						{ "id": 28, "sat": "15JAN21161308" },
+						{ "id": 29, "sat": "15FEB08160130" },
+						{ "id": 30, "sat": "14OCT11155720" },
+						{ "id": 32, "sat": "15JAN21161308" },
+						{ "id": 33, "sat": "15JAN21161308" },
+						{ "id": 36, "sat": "15JAN21161308" },
+						{ "id": 37, "sat": "15JAN21161253" },
+						{ "id": 39, "sat": "15DEC21161108" },
+						{ "id": 40, "sat": "15JAN21161308" },
+						{ "id": 41, "sat": "15JAN21161308" },
+						{ "id": 42, "sat": "15FEB08160130" },
+						{ "id": 46, "sat": "15FEB08160130" },
+						{ "id": 47, "sat": "15APR19161439" },
+						{ "id": 48, "sat": "15FEB08160130" },
+						{ "id": 55, "sat": "15FEB08160130" },
+						{ "id": 59, "sat": "15MAY01160357" },
+						{ "id": 61, "sat": "14OCT11155720" },
+						{ "id": 68, "sat": "15MAY01160357" }
+					]
+				},
+				"hist": {
+					"clusterDir": "2019-01-11/AOI-D4/01700_MODELING/BuildingClusters"
+				}
+			},
+			"satelliteDir": "satellites/D4/pansharpened_old2"
+		},
+		"D3": {
+			"models": {
+				"cgv_r": {
+					"clusterDir": "results_20180910/D3/BuildingClusters",
+					"selected": [
+						{ "id":  1, "sat": "17JUN02190727" },
+						{ "id":  2, "sat": "14DEC23182236" },
+						{ "id":  3, "sat": "15AUG26183306" },
+						{ "id":  4, "sat": "14DEC23182236" },
+						{ "id":  5, "sat": "15AUG26183306" },
+						{ "id":  6, "sat": "14DEC23182236" },
+						{ "id":  8, "sat": "15AUG26183306" },
+						{ "id":  9, "sat": "14DEC23182236" },
+						{ "id": 10, "sat": "15DEC25184902" },
+						{ "id": 11, "sat": "14DEC23182236" },
+						{ "id": 12, "sat": "14DEC23182236" },
+						{ "id": 13, "sat": "14DEC23182236" },
+						{ "id": 14, "sat": "15FEB11182349" },
+						{ "id": 15, "sat": "14DEC23182236" },
+						{ "id": 16, "sat": "15AUG08184609" },
+						{ "id": 17, "sat": "14DEC23182236" },
+						{ "id": 18, "sat": "16FEB14185256" },
+						{ "id": 19, "sat": "14DEC23182236" },
+						{ "id": 21, "sat": "14DEC23182236" },
+						{ "id": 22, "sat": "14DEC23182236" },
+						{ "id": 23, "sat": "15AUG26183306" },
+						{ "id": 24, "sat": "15FEB11182349" },
+						{ "id": 25, "sat": "14DEC23182236" },
+						{ "id": 27, "sat": "14DEC23182236" },
+						{ "id": 28, "sat": "14DEC23182236" },
+						{ "id": 29, "sat": "14DEC23182236" },
+						{ "id": 31, "sat": "14DEC23182236" },
+						{ "id": 35, "sat": "15DEC25184902" },
+						{ "id": 38, "sat": "14DEC23182236" },
+						{ "id": 39, "sat": "14DEC23182236" },
+						{ "id": 41, "sat": "14DEC23182236" },
+						{ "id": 43, "sat": "14DEC23182236" },
+						{ "id": 46, "sat": "15DEC25184902" },
+						{ "id": 47, "sat": "14DEC23182236" },
+						{ "id": 50, "sat": "15DEC13185848" },
+						{ "id": 52, "sat": "15AUG26183306" },
+						{ "id": 53, "sat": "14DEC23182236" },
+						{ "id": 57, "sat": "14DEC23182236" },
+						{ "id": 58, "sat": "15NOV17184802" },
+						{ "id": 60, "sat": "15APR28183136" }
+					]
+				}
+			},
+			"satelliteDir": "satellites/D3/pansharpened_2"
+		},
+		"D2": {
+			"models": {
+				"cgv_r": {
+					"clusterDir": "results_20180910/D2/BuildingClusters"
+				}
+			},
+			"satelliteDir": "satellites/D2/pansharpened"
+		}
+	},
+	"dataDir": "data",
+	"outputDir": "output"
+}

@@ -2,25 +2,63 @@
 #include "dn_lego_syn.h"
 
 int main(int argc, const char* argv[]) {
-	if (argc != 3) {
+	if (argc != 4) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//return 0;
+	{
+		cv::Mat croppedImage;
+		bool bvalid = chipping("output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], croppedImage, true, "0001_0.9922_0017_15JAN21161308.png");
+		if (bvalid) {
+			cv::Mat dnn_img;
+			segment_chip(croppedImage, dnn_img, "output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], true, "0001_0.9922_0017_15JAN21161308.png");
+			feedDnn(dnn_img, "output/D4/cgv_r/0001/metadata/0001_0017.json", argv[3], true, "0001_0.9922_0017_15JAN21161308.png");
+		}
+	}
+	return 0;
 	std::string path(argv[1]);
-	std::vector<std::string> clusters = get_all_files_names_within_folder(path);
+	std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
+	std::vector<std::string> clusters;
+	clusters.resize(clustersID.size());
+	for (int i = 0; i < clustersID.size(); i++) {
+		if (clustersID[i] < 10)
+			clusters[i] = "000" + std::to_string(clustersID[i]);
+		else if(clustersID[i] < 100)
+			clusters[i] = "00" + std::to_string(clustersID[i]);
+	}
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajason = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::cout << metajason << std::endl;
-			process_single_chip(metajason, argv[2]);
 		}
 	}
 	return 0;
 }
 
-void process_single_chip(std::string metajson, std::string modeljson) {
+std::vector<int> clustersList(std::string metajson, int regionId, std::string modelType) {
+	// read image json file
+	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document doc;
+	doc.ParseStream(is);
+	rapidjson::Value& regions = doc["regions"];
+	std::string region = "D" + std::to_string(regionId);
+	rapidjson::Value& regionContent = regions[region.c_str()];
+	rapidjson::Value& regionModels = regionContent["models"];
+	rapidjson::Value& regionModel = regionModels[modelType.c_str()];
+	rapidjson::Value& clustersSelected = regionModel["selected"];
+	std::vector<int> clustersList;
+	clustersList.resize(clustersSelected.Size());
+	for (int i = 0; i < clustersSelected.Size(); i++) {
+		clustersList[i] = clustersSelected[i]["id"].GetInt();
+		//std::cout << clustersList[i] << std::endl;
+	}
+	return clustersList;
+}
+
+bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage, bool bDebug, std::string img_filename) {
 	// read image json file
 	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
@@ -41,19 +79,19 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	int type = 0;
 	if (facChip_size[0] < 30.0 && facChip_size[0] > 15.0 && facChip_size[1] < 30.0 && facChip_size[1] > 15.0 && score > 0.95) {
 		type = 1;
-		//bvalid = true;
+		bvalid = true;
 	}
-	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 13.0 && score > 0.95) {
+	else if (facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 12.9 && score > 0.95) {
 		type = 2;
 		bvalid = true;
 	}
-	else if (facChip_size[0] < 30.0 && facChip_size[0] > 13.0 && facChip_size[1] > 30.0 && score > 0.95) {
+	else if (facChip_size[0] < 30.0 && facChip_size[0] > 12.9 && facChip_size[1] > 30.0 && score > 0.95) {
 		type = 3;
 		bvalid = true;
 	}
 	else if (facChip_size[0] > 30.0 && facChip_size[1] > 30.0 && score > 0.85) {
 		type = 4;
-		//bvalid = true;
+		bvalid = true;
 	}
 	else {
 		// do nothing
@@ -69,19 +107,15 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		cv::Mat src = cv::imread(img_name, 1);
 		for (int i = 0; i < src.size().height; i++) {
 			for (int j = 0; j < src.size().width; j++) {
-				avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-				avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-				avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+				for(int c = 0; c < 3; c++)
+					avg_color.val[c] += src.at<cv::Vec3b>(i, j)[c];
 			}
 		}
-		avg_color.val[0] = avg_color.val[0] / (src.size().height * src.size().width);
-		avg_color.val[1] = avg_color.val[1] / (src.size().height * src.size().width);
-		avg_color.val[2] = avg_color.val[2] / (src.size().height * src.size().width);
-
 		rapidjson::Value avg_color_json(rapidjson::kArrayType);
-		avg_color_json.PushBack(avg_color.val[0], alloc);
-		avg_color_json.PushBack(avg_color.val[1], alloc);
-		avg_color_json.PushBack(avg_color.val[2], alloc);
+		for (int i = 0; i < 3; i++) {
+			avg_color.val[i] = avg_color.val[i] / (src.size().height * src.size().width);
+			avg_color_json.PushBack(avg_color.val[i], alloc);
+		}
 		doc.AddMember("bg_color", avg_color_json, alloc);
 
 		char writeBuffer[10240];
@@ -89,131 +123,680 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 		rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
 		doc.Accept(writer);
 		fclose(fp);
-		return;
+		return false;
 	}
+
 	// read model config json file
 	fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
 	memset(readBuffer, 0, sizeof(readBuffer));
 	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
 	rapidjson::Document docModel;
 	docModel.ParseStream(isModel);
-	std::string model_name;
-	std::string grammar_name;
-	// flag debug
-	bool bDebug = readBoolValue(docModel, "debug", false);
-	if (bground) { // choose grammar2
-		grammar_name = "grammar2";
-	}
-	else { // choose grammar1
-		grammar_name = "grammar1";
-	}
-	rapidjson::Value& grammar = docModel[grammar_name.c_str()];
-	// path of DN model
-	model_name = readStringValue(grammar, "model");
-	if(bDebug)
-		std::cout << "model_name is " << model_name << std::endl;
-	// number of paras
-	int num_paras = readNumber(grammar, "number_paras", 5);
-	if (bDebug)
-		std::cout << "num_paras is " << num_paras << std::endl;
-	// range of Rows
-	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
-	if (tmp_array.size() != 2) {
-		std::cout << "Please check the rangeOfRows member in the JSON file" << std::endl;
-		return;
-	}
-	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
-	if (bDebug)
-		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
-	// range of Cols
-	tmp_array.empty();
-	tmp_array = read1DArray(grammar, "rangeOfCols");
-	if (tmp_array.size() != 2) {
-		std::cout << "Please check the rangeOfCols member in the JSON file" << std::endl;
-		return;
-	}
-	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
-	if (bDebug)
-		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
-	// range of Grouping
-	tmp_array.empty();
-	tmp_array = read1DArray(grammar, "rangeOfGrouping");
-	if (tmp_array.size() != 2) {
-		std::cout << "Please check the rangeOfGrouping member in the JSON file" << std::endl;
-		return;
-	}
-	std::pair<int, int> imageGroups(tmp_array[0], tmp_array[1]);
-	if (bDebug)
-		std::cout << "imageGroups is " << imageGroups.first << ", " << imageGroups.second << std::endl;
-	// default size for NN
-	int height = 224; // DNN image height
-	int width = 224; // DNN image width
-	tmp_array.empty();
-	tmp_array = read1DArray(docModel, "defaultSize");
-	if (tmp_array.size() != 2) {
-		std::cout << "Please check the defaultSize member in the JSON file" << std::endl;
-		return;
-	}
-	width = tmp_array[0];
-	height = tmp_array[1];
-	std::pair<int, int> imageDoors(2, 6);
-	if (bground) {
-		tmp_array.empty();
-		tmp_array = read1DArray(grammar, "rangeOfDoors");
-		if (tmp_array.size() != 2) {
-			std::cout << "Please check the rangeOfDoors member in the JSON file" << std::endl;
-			return;
-		}
-		imageDoors.first = tmp_array[0];
-		imageDoors.second = tmp_array[1];
-		if (bDebug)
-			std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
-	}
-	tmp_array.empty();
-	tmp_array = read1DArray(docModel, "targetChipSize");
+
+	std::vector<double> tmp_array = read1DArray(docModel, "targetChipSize");
 	if (tmp_array.size() != 2) {
 		std::cout << "Please check the targetChipSize member in the JSON file" << std::endl;
-		return;
+		return false;
 	}
 	double target_width = tmp_array[0];
 	double target_height = tmp_array[1];
-	// get facade folder path
-	std::string facades_folder = readStringValue(docModel, "facadesFolder");
-	// get chips folder path
-	std::string chips_folder = readStringValue(docModel, "chipsFolder");
-	// get segs folder path
-	std::string segs_folder = readStringValue(docModel, "segsFolder");
-	// get segs folder path
-	std::string resizes_folder = readStringValue(docModel, "resizesFolder");
-	// get dilates folder path
-	std::string dilates_folder = readStringValue(docModel, "dilatesFolder");
-	// get aligns folder path
-	std::string aligns_folder = readStringValue(docModel, "alignsFolder");
-	// get dnn folder path
-	std::string dnnsIn_folder = readStringValue(docModel, "dnnsInFolder");
-	// get dnn folder path
-	std::string dnnsOut_folder = readStringValue(docModel, "dnnsOutFolder");
-	fclose(fp);
-	// Deserialize the ScriptModule from a file using torch::jit::load().
+
+	cv::Mat src_chip;
+	src_chip = cv::imread(img_name);
+	// crop a chip
+	croppedImage = crop_chip(src_chip, type, bground, facChip_size, target_width, target_height);
+	// adjust the chip
+	if (type == 2 || type == 3 || type == 4)
+		croppedImage = adjust_chip(src_chip, croppedImage, type, bground, facChip_size, target_width, target_height);
+	if (bDebug) {
+		// get facade folder path
+		std::string facades_folder = readStringValue(docModel, "facadesFolder");
+		// get chips folder path
+		std::string chips_folder = readStringValue(docModel, "chipsFolder");
+		cv::imwrite(facades_folder + "/" + img_filename, src_chip);
+		cv::imwrite(chips_folder + "/" + img_filename, croppedImage);
+	}
+	return true;
+}
+
+bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	// default size for NN
+	int height = 224; // DNN image height
+	int width = 224; // DNN image width
+	std::vector<double> tmp_array = read1DArray(docModel, "defaultSize");
+	width = tmp_array[0];
+	height = tmp_array[1];
+	// load image
+	cv::Mat src, dst_ehist, dst_classify;
+	src = croppedImage;
+	cv::Mat hsv;
+	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
+	std::vector<cv::Mat> bgr;   //destination array
+	cv::split(hsv, bgr);//split source 
+	for (int i = 0; i < 3; i++)
+		cv::equalizeHist(bgr[i], bgr[i]);
+	dst_ehist = bgr[2];
+	int threshold = 0;
+	// kkmeans classification
+	dst_classify = facade_clustering_kkmeans(dst_ehist, cluster_number);
+	// generate input image for DNN
+	cv::Scalar bg_color(255, 255, 255); // white back ground
+	cv::Scalar window_color(0, 0, 0); // black for windows
+	cv::Mat scale_img;
+	cv::resize(dst_classify, scale_img, cv::Size(width, height));
+	// correct the color
+	for (int i = 0; i < scale_img.size().height; i++) {
+		for (int j = 0; j < scale_img.size().width; j++) {
+			//noise
+			if ((int)scale_img.at<uchar>(i, j) < 128) {
+				scale_img.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				scale_img.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+
+	// dilate to remove noises
+	int dilation_type = cv::MORPH_RECT;
+	cv::Mat dilation_dst;
+	int kernel_size = 5;
+	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+	/// Apply the dilation operation
+	cv::dilate(scale_img, dilation_dst, element);
+
+	// alignment
+	float angle = findSkewAngle(dilation_dst);
+	if (bDebug)
+		std::cout << "angle is " << angle << std::endl;
+	// rotate the image
+	cv::Mat aligned_img;
+	cv::Point2f offset(dilation_dst.cols / 2, dilation_dst.rows / 2);
+	cv::Mat rot_mat = cv::getRotationMatrix2D(offset, angle, 1.0);
+	cv::warpAffine(dilation_dst, aligned_img, rot_mat, dilation_dst.size(), cv::INTER_CUBIC, cv::BORDER_REPLICATE);
+	// clean up the image
+	aligned_img = cleanAlignedImage(aligned_img, 0.10);
+	// add padding
+	int padding_size = 5;
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Scalar value(255, 255, 255);
+	cv::Mat aligned_img_padding;
+	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
+
+	// find contours
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+	std::vector<cv::Rect> boundRect(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+	}
+	dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
+	for (int i = 1; i< contours.size(); i++)
+	{
+		if (hierarchy[i][3] != 0) continue;
+		// check the validity of the rect
+		float area_contour = cv::contourArea(contours[i]);
+		float area_rect = boundRect[i].width * boundRect[i].height;
+		if (area_rect < 10) continue;
+		if (area_rect < 100) {
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+			continue;
+		}
+		float ratio = area_contour / area_rect;
+		int tmp = 0;
+		while (ratio < 0.5 && (boundRect[i].height - tmp) > 0) {
+			area_rect = boundRect[i].width * (boundRect[i].height - tmp);
+			ratio = area_contour / area_rect;
+			tmp += 2;
+		}
+		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y + tmp / 2), cv::Point(boundRect[i].br().x, boundRect[i].br().y - tmp / 2), window_color, -1);
+	}
+	// remove padding
+	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
+	if (bDebug) {
+		// get segs folder path
+		std::string segs_folder = readStringValue(docModel, "segsFolder");
+		// get segs folder path
+		std::string resizes_folder = readStringValue(docModel, "resizesFolder");
+		// get dilates folder path
+		std::string dilates_folder = readStringValue(docModel, "dilatesFolder");
+		// get aligns folder path
+		std::string aligns_folder = readStringValue(docModel, "alignsFolder");
+		// get dnn folder path
+		std::string dnnsIn_folder = readStringValue(docModel, "dnnsInFolder");
+		//
+		cv::imwrite(segs_folder + "/" + img_filename, dst_classify);
+		cv::imwrite(resizes_folder + "/" + img_filename, scale_img);
+		cv::imwrite(dilates_folder + "/" + img_filename, dilation_dst);
+		cv::imwrite(aligns_folder + "/" + img_filename, aligned_img);
+		cv::imwrite(dnnsIn_folder + "/" + img_filename, dnn_img);
+	}
+	// write back to json file
+	cv::Scalar bg_avg_color(0, 0, 0);
+	cv::Scalar win_avg_color(0, 0, 0);
+	{
+		int bg_count = 0;
+		int win_count = 0;
+		for (int i = 0; i < dst_classify.size().height; i++) {
+			for (int j = 0; j < dst_classify.size().width; j++) {
+				if ((int)dst_classify.at<uchar>(i, j) == 0) {
+					win_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
+					win_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
+					win_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+					win_count++;
+				}
+				else {
+					bg_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
+					bg_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
+					bg_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+					bg_count++;
+				}
+			}
+		}
+		if (win_count > 0) {
+			win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+			win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+			win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+		}
+		if (bg_count > 0) {
+			bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+			bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+		}
+	}
+	writeBackAvgColors(metajson, true, bg_avg_color, win_avg_color);
+
+	return true;
+}
+
+std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	std::string classifier_name;
+
+	rapidjson::Value& grammars = docModel["grammars"];
+	// classifier
+	rapidjson::Value& grammar_classifier = grammars["classifier"];
+	// path of DN model
+	classifier_name = readStringValue(grammar_classifier, "model");
+	int num_classes = readNumber(grammar_classifier, "number_paras", 6);
+	if (bDebug) {
+		std::cout << "classifier_name is " << classifier_name << std::endl;
+	}
+
+	cv::cvtColor(dnn_img, dnn_img, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+	int best_class = 1;
+
+	if(false)
+	{
+		// Deserialize the ScriptModule from a file using torch::jit::load().
+		std::shared_ptr<torch::jit::script::Module> classifier_module = torch::jit::load(classifier_name);
+		classifier_module->to(at::kCUDA);
+		assert(classifier_module != nullptr);
+		torch::Tensor out_tensor = classifier_module->forward(inputs).toTensor();
+		std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
+		double best_score = 0;
+		for (int i = 0; i < num_classes; i++) {
+			double tmp = out_tensor.slice(1, i, i + 1).item<float>();
+			if (tmp > best_score) {
+				best_score = tmp;
+				best_class = i;
+			}
+		}
+		best_class = best_class + 1;
+		std::cout << "DNN class is " << best_class << std::endl;
+	}
+
+	// choose conresponding estimation DNN
+	std::string model_name;
+	std::string grammar_name = "grammar" + std::to_string(best_class);
+	rapidjson::Value& grammar = grammars[grammar_name.c_str()];
+	// path of DN model
+	model_name = readStringValue(grammar, "model");
+	if (bDebug)
+		std::cout << "model_name is " << model_name << std::endl;
+	// number of paras
+	int num_paras = readNumber(grammar, "number_paras", 5);
+
 	std::shared_ptr<torch::jit::script::Module> module = torch::jit::load(model_name);
 	module->to(at::kCUDA);
 	assert(module != nullptr);
-
-	// reshape the chip and pick the representative one
-	double ratio_width, ratio_height;
-	// image relative name
-	std::size_t found = img_name.find("chip/");
-	if (found < 0) {
-		std::cout << "found failed!!!" << std::endl;
-		return;
+	torch::Tensor out_tensor_grammar = module->forward(inputs).toTensor();
+	std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
+	std::vector<double> paras;
+	for (int i = 0; i < num_paras; i++) {
+		paras.push_back(out_tensor_grammar.slice(1, i, i + 1).item<float>());
 	}
-	found = found + 5;
-	cv::Mat src_chip, dst_chip, croppedImage;
-	if (bDebug)
-		std::cout << "type is " << type << std::endl;
-	src_chip = cv::imread(img_name);
+	fclose(fp);
+	std::vector<double> predictions;
+	return predictions;
+	if (best_class == 1) {
+		predictions = grammar1(modeljson, paras, bDebug);
+	}
+	else if (best_class == 2) {
+		predictions = grammar2(modeljson, paras, bDebug);
+	}
+	else if (best_class == 3) {
+		predictions = grammar3(modeljson, paras, bDebug);
+	}
+	else if (best_class == 4) {
+		predictions = grammar4(modeljson, paras, bDebug);
+	}
+	else if (best_class == 5) {
+		predictions = grammar5(modeljson, paras, bDebug);
+	}
+	else if (best_class == 6) {
+		predictions = grammar6(modeljson, paras, bDebug);
+	}
+	else {
+		//do nothing
+		predictions = grammar1(modeljson, paras, bDebug);
+	}
+	// write back to json file
+	fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
+	memset(readBuffer, 0, sizeof(readBuffer));
+	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document doc;
+	doc.ParseStream(is);
+	fclose(fp);
+	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
+	rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
+	if (predictions.size() == 5) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		double relative_width = predictions[3];
+		double relative_height = predictions[4];
+
+		rapidjson::Value paras_json(rapidjson::kObjectType);
+		paras_json.AddMember("rows", img_rows, alloc);
+		paras_json.AddMember("cols", img_cols, alloc);
+		paras_json.AddMember("grouping", img_groups, alloc);
+		paras_json.AddMember("relativeWidth", relative_width, alloc);
+		paras_json.AddMember("relativeHeight", relative_height, alloc);
+		doc.AddMember("paras", paras_json, alloc);
+	}
+	if (predictions.size() == 8) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		int img_doors = predictions[3];
+		double relative_width = predictions[4];
+		double relative_height = predictions[5];
+		double relative_door_width = predictions[6];
+		double relative_door_height = predictions[7];
+
+		rapidjson::Value paras_json(rapidjson::kObjectType);
+		paras_json.AddMember("rows", img_rows, alloc);
+		paras_json.AddMember("cols", img_cols, alloc);
+		paras_json.AddMember("grouping", img_groups, alloc);
+		paras_json.AddMember("doors", img_doors, alloc);
+		paras_json.AddMember("relativeWidth", relative_width, alloc);
+		paras_json.AddMember("relativeHeight", relative_height, alloc);
+		paras_json.AddMember("relativeDWidth", relative_door_width, alloc);
+		paras_json.AddMember("relativeDHeight", relative_door_height, alloc);
+		doc.AddMember("paras", paras_json, alloc);
+	}
+	char writeBuffer[10240];
+	rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+	rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+	doc.Accept(writer);
+	fclose(fp);
+	return predictions;
+}
+
+std::vector<double> grammar1(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar1"];
+	// range of Rows
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
+	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
+	// range of Cols
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "rangeOfCols");
+	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
+	// relativeWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeWidth");
+	std::pair<double, double> imageRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeHeight");
+	std::pair<double, double> imageRelativeHeight(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
+		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
+		std::cout << "imageRelativeWidth is " << imageRelativeWidth.first << ", " << imageRelativeWidth.second << std::endl;
+		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_groups = 1;
+	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
+	double relative_height = paras[3] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	return results;
+}
+
+std::vector<double> grammar2(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar2"];
+	// range of Rows
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
+	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
+	// range of Cols
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "rangeOfCols");
+	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
+	// range of Doors
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "rangeOfDoors");
+	std::pair<int, int> imageDoors(tmp_array[0], tmp_array[1]);
+	// relativeWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeWidth");
+	std::pair<double, double> imageRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeHeight");
+	std::pair<double, double> imageRelativeHeight(tmp_array[0], tmp_array[1]);
+	// relativeDWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDWidth");
+	std::pair<double, double> imageDRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeDHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDHeight");
+	std::pair<double, double> imageDRelativeHeight(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
+		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
+		std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
+		std::cout << "imageRelativeWidth is " << imageRelativeWidth.first << ", " << imageRelativeWidth.second << std::endl;
+		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
+		std::cout << "imageDRelativeWidth is " << imageDRelativeWidth.first << ", " << imageDRelativeWidth.second << std::endl;
+		std::cout << "imageDRelativeHeight is " << imageDRelativeHeight.first << ", " << imageDRelativeHeight.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_groups = 1;
+	int img_doors = round(paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	double relative_width = paras[3] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
+	double relative_height = paras[4] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	double relative_door_width = paras[5] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
+	double relative_door_height = paras[6] * (imageDRelativeHeight.second - imageDRelativeHeight.first) + imageDRelativeHeight.first;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(img_doors);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	results.push_back(relative_door_width);
+	results.push_back(relative_door_height);
+	return results;
+}
+
+std::vector<double> grammar3(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar3"];
+	// range of Cols
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfCols");
+	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
+	// relativeWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeWidth");
+	std::pair<double, double> imageRelativeWidth(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
+		std::cout << "imageRelativeWidth is " << imageRelativeWidth.first << ", " << imageRelativeWidth.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = 1;
+	int img_cols = round(paras[0] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_groups = 1;
+	double relative_width = paras[1] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
+	double relative_height = 1.0;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	return results;
+}
+
+std::vector<double> grammar4(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar4"];
+	// range of Rows
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfCols");
+	std::pair<int, int> imageCols(tmp_array[0], tmp_array[1]);
+	// range of Doors
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "rangeOfDoors");
+	std::pair<int, int> imageDoors(tmp_array[0], tmp_array[1]);
+	// relativeWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeWidth");
+	std::pair<double, double> imageRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeDWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDWidth");
+	std::pair<double, double> imageDRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeDHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDHeight");
+	std::pair<double, double> imageDRelativeHeight(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageCols is " << imageCols.first << ", " << imageCols.second << std::endl;
+		std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
+		std::cout << "imageRelativeWidth is " << imageRelativeWidth.first << ", " << imageRelativeWidth.second << std::endl;
+		std::cout << "imageDRelativeWidth is " << imageDRelativeWidth.first << ", " << imageDRelativeWidth.second << std::endl;
+		std::cout << "imageDRelativeHeight is " << imageDRelativeHeight.first << ", " << imageDRelativeHeight.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = 1;;
+	int img_cols = round(paras[0] * (imageCols.second - imageCols.first) + imageCols.first);
+	int img_groups = 1;
+	int img_doors = round(paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
+	double relative_height = 1.0;
+	double relative_door_width = paras[3] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
+	double relative_door_height = paras[4] * (imageDRelativeHeight.second - imageDRelativeHeight.first) + imageDRelativeHeight.first;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(img_doors);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	results.push_back(relative_door_width);
+	results.push_back(relative_door_height);
+	return results;
+}
+
+std::vector<double> grammar5(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar5"];
+	// range of Rows
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
+	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
+	// relativeHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeHeight");
+	std::pair<double, double> imageRelativeHeight(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
+		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_cols = 1;
+	int img_groups = 1;
+	double relative_width = 1.0;
+	double relative_height = paras[1] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	return results;
+}
+
+std::vector<double> grammar6(std::string modeljson, std::vector<double> paras, bool bDebug) {
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	rapidjson::Value& grammars = docModel["grammars"];
+	rapidjson::Value& grammar = grammars["grammar6"];
+	// range of Rows
+	std::vector<double> tmp_array = read1DArray(grammar, "rangeOfRows");
+	std::pair<int, int> imageRows(tmp_array[0], tmp_array[1]);
+	// range of Doors
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "rangeOfDoors");
+	std::pair<int, int> imageDoors(tmp_array[0], tmp_array[1]);
+	// relativeHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeHeight");
+	std::pair<double, double> imageRelativeHeight(tmp_array[0], tmp_array[1]);
+	// relativeDWidth
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDWidth");
+	std::pair<double, double> imageDRelativeWidth(tmp_array[0], tmp_array[1]);
+	// relativeDHeight
+	tmp_array.empty();
+	tmp_array = read1DArray(grammar, "relativeDHeight");
+	std::pair<double, double> imageDRelativeHeight(tmp_array[0], tmp_array[1]);
+	if (bDebug) {
+		std::cout << "imageRows is " << imageRows.first << ", " << imageRows.second << std::endl;
+		std::cout << "imageDoors is " << imageDoors.first << ", " << imageDoors.second << std::endl;
+		std::cout << "imageRelativeHeight is " << imageRelativeHeight.first << ", " << imageRelativeHeight.second << std::endl;
+		std::cout << "imageDRelativeWidth is " << imageDRelativeWidth.first << ", " << imageDRelativeWidth.second << std::endl;
+		std::cout << "imageDRelativeHeight is " << imageDRelativeHeight.first << ", " << imageDRelativeHeight.second << std::endl;
+	}
+	fclose(fp);
+	int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
+	int img_cols = 1;
+	int img_groups = 1;
+	int img_doors = round(paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first);
+	double relative_width = 1.0;
+	double relative_height = paras[2] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	double relative_door_width = paras[3] * (imageDRelativeWidth.second - imageDRelativeWidth.first) + imageDRelativeWidth.first;
+	double relative_door_height = paras[4] * (imageDRelativeHeight.second - imageDRelativeHeight.first) + imageDRelativeHeight.first;
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(img_doors);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	results.push_back(relative_door_width);
+	results.push_back(relative_door_height);
+	return results;
+}
+
+void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, std::string img_filename, bool bDebug){
+	cv::Mat syn_img;
+	if (predictions.size() == 5) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		double relative_width = predictions[3];
+		double relative_height = predictions[4];
+		syn_img = generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, relative_width, relative_height);
+	}
+	if(predictions.size() == 8) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		int img_doors = predictions[3];
+		double relative_width = predictions[4];
+		double relative_height = predictions[5];
+		double relative_door_width = predictions[6];
+		double relative_door_height = predictions[7];
+		syn_img = generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height);
+	}
+	// recover to the original image
+	cv::resize(syn_img, syn_img, src_size);
+	for (int i = 0; i < syn_img.size().height; i++) {
+		for (int j = 0; j < syn_img.size().width; j++) {
+			if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
+				syn_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
+				syn_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
+				syn_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+			}
+			else {
+				syn_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
+				syn_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
+				syn_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+			}
+		}
+	}
+	if (bDebug) {
+		cv::imwrite(dnnsOut_folder + "/" + img_filename, syn_img);
+	}
+}
+
+cv::Mat crop_chip(cv::Mat src_chip, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height) {
+	cv::Mat croppedImage;
 	if (type == 1) {
-		std::cout << "image name is " << img_name << std::endl;
 		croppedImage = src_chip.clone();
 	}
 	else if (type == 2) {
@@ -250,11 +833,14 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	else {
 		// do nothing
 	}
+	return croppedImage;
+}
+
+cv::Mat adjust_chip(cv::Mat src_chip, cv::Mat chip, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height) {
 	// load image
-	cv::Mat src, dst_ehist, dst_classify;
-	src = croppedImage;
+	cv::Mat dst_ehist, dst_classify;
 	cv::Mat hsv;
-	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
+	cvtColor(chip, hsv, cv::COLOR_BGR2HSV);
 	std::vector<cv::Mat> bgr;   //destination array
 	cv::split(hsv, bgr);//split source 
 	for (int i = 0; i < 3; i++)
@@ -262,280 +848,138 @@ void process_single_chip(std::string metajson, std::string modeljson) {
 	dst_ehist = bgr[2];
 	int threshold = 0;
 	// threshold classification
-	if(false)
-	{
-		int threshold = find_threshold(src, bground);
-		cv::threshold(dst_ehist, dst_classify, threshold, max_BINARY_value, cv::THRESH_BINARY);
-	}
-	else { // kkmeans 
-		int clusters = 3;
-		dst_classify = facade_clustering_kkmeans(dst_ehist, clusters);
-	}
-	// generate input image for DNN
-	cv::Scalar bg_color(255, 255, 255); // white back ground
-	cv::Scalar window_color(0, 0, 0); // black for windows
-	cv::Mat scale_img;
-	cv::resize(dst_classify, scale_img, cv::Size(width, height));
-
-	// correct the color
-	for (int i = 0; i < scale_img.size().height; i++) {
-		for (int j = 0; j < scale_img.size().width; j++) {
+	dst_classify = facade_clustering_kkmeans(dst_ehist, cluster_number);
+	// find the boundary
+	int scan_line = 0;
+	// bottom 
+	int pos_bot = 0;
+	for (int i = dst_classify.size().height - 1; i >=0; i--) {
+		scan_line = 0;
+		for (int j = 0; j < dst_classify.size().width; j++) {
 			//noise
-			if ((int)scale_img.at<uchar>(i, j) < 128) {
-				scale_img.at<uchar>(i, j) = (uchar)0;
+			if ((int)dst_classify.at<uchar>(i, j) == 0) {
+				scan_line++;
 			}
 		}
+		if (scan_line * 1.0 / dst_classify.size().width < 0.90) { // threshold is 0.9
+			pos_bot = i;
+			break;
+		}
+
 	}
-
-	// dilate to remove noises
-	int dilation_type = cv::MORPH_RECT;
-	cv::Mat dilation_dst;
-	int kernel_size = 5;
-	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
-	/// Apply the dilation operation
-	cv::dilate(scale_img, dilation_dst, element);
-
-	// alignment
-	float angle = findSkewAngle(dilation_dst);
-	if (bDebug)
-		std::cout << "angle is " << angle << std::endl;
-	// rotate the image
-	cv::Mat aligned_img;
-	cv::Point2f offset(dilation_dst.cols / 2, dilation_dst.rows / 2);
-	cv::Mat rot_mat = cv::getRotationMatrix2D(offset, angle, 1.0);
-	cv::warpAffine(dilation_dst, aligned_img, rot_mat, dilation_dst.size(), cv::INTER_CUBIC, cv::BORDER_REPLICATE);
+	pos_bot = dst_classify.size().height - 1 - pos_bot;
 	
-	// add padding
-	int padding_size = 5;
-	int borderType = cv::BORDER_CONSTANT;
-	cv::Scalar value(255, 255, 255);
-	cv::Mat aligned_img_padding;
-	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
-
-	std::vector<std::vector<cv::Point> > contours;
-	std::vector<cv::Vec4i> hierarchy;
-	cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-
-	std::vector<cv::Rect> boundRect(contours.size());
-	for (int i = 0; i < contours.size(); i++)
-	{
-		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
-	}
-	cv::Mat dnn_img(aligned_img_padding.size(), CV_8UC3, bg_color);
-	for (int i = 1; i< contours.size(); i++)
-	{
-		if (hierarchy[i][3] != 0) continue;
-		// check the validity of the rect
-		float area_contour = cv::contourArea(contours[i]);
-		float area_rect = boundRect[i].width * boundRect[i].height;
-		if (area_rect < 10) continue;
-		if (area_rect < 100) {
-			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
-			continue;
-		}
-		float ratio = area_contour / area_rect;
-		int tmp = 0;
-		while (ratio < 0.5 && (boundRect[i].height - tmp) > 0) {
-			area_rect = boundRect[i].width * (boundRect[i].height - tmp);
-			ratio = area_contour / area_rect;
-			tmp += 2;
-		}
-		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y + tmp / 2), cv::Point(boundRect[i].br().x, boundRect[i].br().y - tmp / 2), window_color, -1);
-	}
-	// remove padding
-	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
-
-	cv::cvtColor(dnn_img, dnn_img, CV_BGR2RGB);
-	cv::Mat img_float;
-	dnn_img.convertTo(img_float, CV_32F, 1.0 / 255);
-	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
-	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
-	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
-	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
-	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
-
-	std::vector<torch::jit::IValue> inputs;
-	inputs.push_back(img_tensor);
-	torch::Tensor out_tensor = module->forward(inputs).toTensor();
-	std::cout << out_tensor.slice(1, 0, num_paras) << std::endl;
-	std::vector<double> paras;
-	for (int i = 0; i < num_paras; i++) {
-		paras.push_back(out_tensor.slice(1, i, i + 1).item<float>());
-	}
-	// adjust paras
-	bool bInvalidDnn = false;
-	for (int i = 0; i < num_paras; i++) {
-		if (paras[i] > 1.0)
-			paras[i] = 1.0;
-		if (paras[i] < 0.0) {
-			if (i != 2) {
-				bInvalidDnn = true;
-			}
-			paras[i] = 0.0;
-		}
-	}
-	/*if (bInvalidDnn)
-		bvalid = false;*/
-	bInvalidDnn = false;
-	//
-	if (!bvalid) {
-		// write back to json file
-		fp = fopen(metajson.c_str(), "wb"); // non-Windows use "w"
-		rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
-		doc.AddMember("valid", bvalid, alloc);
-		// compute avg color
-		cv::Scalar avg_color(0, 0, 0);
-		cv::Mat src = cv::imread(img_name, 1);
-		for (int i = 0; i < src.size().height; i++) {
-			for (int j = 0; j < src.size().width; j++) {
-				avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-				avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-				avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+	// left
+	int pos_left = 0;
+	for (int i = 0; i < dst_classify.size().width; i++) {
+		scan_line = 0;
+		for (int j = 0; j < dst_classify.size().height; j++) {
+			//noise
+			if ((int)dst_classify.at<uchar>(j, i) == 0) {
+				scan_line++;
 			}
 		}
-		avg_color.val[0] = avg_color.val[0] / (src.size().height * src.size().width);
-		avg_color.val[1] = avg_color.val[1] / (src.size().height * src.size().width);
-		avg_color.val[2] = avg_color.val[2] / (src.size().height * src.size().width);
+		if (scan_line * 1.0 / dst_classify.size().width > 0.10) { // threshold is 0.1
+			pos_left = i;
+			break;
+		}
 
-		rapidjson::Value avg_color_json(rapidjson::kArrayType);
-		avg_color_json.PushBack(avg_color.val[0], alloc);
-		avg_color_json.PushBack(avg_color.val[1], alloc);
-		avg_color_json.PushBack(avg_color.val[2], alloc);
-		doc.AddMember("bg_color", avg_color_json, alloc);
-
-		char writeBuffer[10240];
-		rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
-		rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
-		doc.Accept(writer);
-		fclose(fp);
-		return;
 	}
-	// for debugging
-	if (bDebug && !bInvalidDnn) {
-		cv::imwrite(facades_folder + "/" + img_name.substr(found), src_chip);
-		cv::imwrite(chips_folder + "/" + img_name.substr(found), croppedImage);
-		cv::imwrite(segs_folder + "/" + img_name.substr(found), dst_classify);
-		cv::imwrite(resizes_folder + "/" + img_name.substr(found), scale_img);
-		cv::imwrite(dilates_folder + "/" + img_name.substr(found), dilation_dst);
-		cv::imwrite(aligns_folder + "/" + img_name.substr(found), aligned_img);
-	}
-	// find the average color for window/non-window
-	cv::Scalar bg_avg_color(0, 0, 0);
-	cv::Scalar win_avg_color(0, 0, 0);
-	{
-		int bg_count = 0;
-		int win_count = 0;
-		for (int i = 0; i < dst_classify.size().height; i++) {
-			for (int j = 0; j < dst_classify.size().width; j++) {
-				if ((int)dst_classify.at<uchar>(i, j) == 0) {
-					win_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-					win_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-					win_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
-					win_count++;
-				}
-				else {
-					bg_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-					bg_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-					bg_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
-					bg_count++;
-				}
+	// right
+	int pos_right = 0;
+	for (int i = dst_classify.size().width - 1; i >= 0;  i--) {
+		scan_line = 0;
+		for (int j = 0; j < dst_classify.size().height; j++) {
+			//noise
+			if ((int)dst_classify.at<uchar>(j, i) == 0) {
+				scan_line++;
 			}
 		}
-		if (win_count > 0) {
-			win_avg_color.val[0] = win_avg_color.val[0] / win_count;
-			win_avg_color.val[1] = win_avg_color.val[1] / win_count;
-			win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+		if (scan_line * 1.0 / dst_classify.size().width > 0.10) { // threshold is 0.1
+			pos_right = i;
+			break;
 		}
-		if (bg_count > 0) {
-			bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
-			bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
-			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
-		}
+
 	}
-	// write back to json file
-	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
-	rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
-	doc.AddMember("valid", bvalid, alloc);
+	pos_right = dst_classify.size().width - 1 - pos_right;
+	
+	cv::Mat croppedImage;
+	if (type == 2) {
+		if (pos_right == 0 && pos_left == 0)
+			return chip;
+		double target_ratio_width = target_width / facChip_size[0];
+		double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+		if (pos_right > pos_left) {
+			if (src_chip.size().width * padding_width_ratio - pos_right > 0)
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio - pos_right, 0, src_chip.size().width * target_ratio_width, src_chip.size().height));
+			else
+				croppedImage = src_chip(cv::Rect(0, 0, src_chip.size().width * target_ratio_width, src_chip.size().height));
+		}
+		else {
+			if (src_chip.size().width * padding_width_ratio + pos_left + src_chip.size().width * target_ratio_width  < src_chip.size().width)
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio + pos_left, 0, src_chip.size().width * target_ratio_width, src_chip.size().height));
+			else
+				croppedImage = src_chip(cv::Rect(src_chip.size().width - src_chip.size().width * target_ratio_width, 0, src_chip.size().width * target_ratio_width, src_chip.size().height));
 
-	rapidjson::Value bg_color_json(rapidjson::kArrayType);
-	bg_color_json.PushBack(bg_avg_color.val[0], alloc);
-	bg_color_json.PushBack(bg_avg_color.val[1], alloc);
-	bg_color_json.PushBack(bg_avg_color.val[2], alloc);
-	doc.AddMember("bg_color", bg_color_json, alloc);
+		}
+		return croppedImage;
+	}
 
-	rapidjson::Value win_color_json(rapidjson::kArrayType);
-	win_color_json.PushBack(win_avg_color.val[0], alloc);
-	win_color_json.PushBack(win_avg_color.val[1], alloc);
-	win_color_json.PushBack(win_avg_color.val[2], alloc);
-	doc.AddMember("window_color", win_color_json, alloc);
-
-	// predict img by DNN
-	cv::Mat syn_img;
 	if (!bground) {
-		int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
-		int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
-		int img_groups = round(paras[2] * (imageGroups.second - imageGroups.first) + imageGroups.first);
-		double relative_width = paras[3];
-		double relative_height = paras[4];
-
-		rapidjson::Value paras_json(rapidjson::kObjectType);
-		paras_json.AddMember("rows", img_rows, alloc);
-		paras_json.AddMember("cols", img_cols, alloc);
-		paras_json.AddMember("grouping", img_groups, alloc);
-		paras_json.AddMember("relativeWidth", relative_width, alloc);
-		paras_json.AddMember("relativeHeight", relative_height, alloc);
-		doc.AddMember("paras", paras_json, alloc);
-
-		syn_img = generateFacadeSynImage(width, height, img_rows, img_cols, img_groups, relative_width, relative_height);
-	}
-	else {
-		int img_rows = round(paras[0] * (imageRows.second - imageRows.first) + imageRows.first);
-		int img_cols = round(paras[1] * (imageCols.second - imageCols.first) + imageCols.first);
-		int img_groups = round(paras[2] * (imageGroups.second - imageGroups.first) + imageGroups.first);
-		int img_doors = round(paras[3] * (imageDoors.second - imageDoors.first) + imageDoors.first);
-		double relative_width = paras[4];
-		double relative_height = paras[5];
-		double relative_door_width = paras[6];
-		double relative_door_height = paras[7];
-
-		rapidjson::Value paras_json(rapidjson::kObjectType);
-		paras_json.AddMember("rows", img_rows, alloc);
-		paras_json.AddMember("cols", img_cols, alloc);
-		paras_json.AddMember("grouping", img_groups, alloc);
-		paras_json.AddMember("doors", img_doors, alloc);
-		paras_json.AddMember("relativeWidth", relative_width, alloc);
-		paras_json.AddMember("relativeHeight", relative_height, alloc);
-		paras_json.AddMember("relativeDWidth", relative_door_width, alloc);
-		paras_json.AddMember("relativeDHeight", relative_door_height, alloc);
-		doc.AddMember("paras", paras_json, alloc);
-
-		syn_img = generateFacadeSynImage(width, height, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height);
-	}
-	char writeBuffer[10240];
-	rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
-	rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
-	doc.Accept(writer);
-	fclose(fp);
-
-	// recover to the original image
-	cv::resize(syn_img, syn_img, src.size());
-	for (int i = 0; i < syn_img.size().height; i++) {
-		for (int j = 0; j < syn_img.size().width; j++) {
-			if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
-				syn_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
-				syn_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
-				syn_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+		if (pos_right == 0 && pos_left == 0)
+			return chip;
+		if (type == 3) {
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_height_ratio = 0;
+			padding_height_ratio = (1 - target_ratio_height) * 0.5;
+			if (pos_right > pos_left) {
+				croppedImage = src_chip(cv::Rect(0, src_chip.size().height * padding_height_ratio, src_chip.size().width - pos_right, src_chip.size().height * target_ratio_height));
 			}
 			else {
-				syn_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
-				syn_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
-				syn_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+				croppedImage = src_chip(cv::Rect(pos_left, src_chip.size().height * padding_height_ratio, src_chip.size().width - pos_left, src_chip.size().height * target_ratio_height));
 			}
 		}
+
+		if (type == 4) {
+			// crop 30 * 30
+			double target_ratio_width = target_width / facChip_size[0];
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+			double padding_height_ratio = (1 - target_ratio_height) * 0.5;
+			if (pos_right > pos_left) {
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width - pos_right, src_chip.size().height * target_ratio_height));
+			}
+			else {
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio + pos_left, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+			}
+		}
+		return croppedImage;
 	}
-	if (bDebug && !bInvalidDnn) {
-		cv::imwrite(dnnsOut_folder + "/" + img_name.substr(found), syn_img);
-		cv::imwrite(dnnsIn_folder + "/" + img_name.substr(found), dnn_img);
+	else {
+		if (pos_bot == 0)
+			return chip;
+		if (type == 3) {
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_height_ratio = 0;
+			padding_height_ratio = (1 - target_ratio_height);
+			if (src_chip.size().height * padding_height_ratio - pos_bot >= 0)
+				croppedImage = src_chip(cv::Rect(0, src_chip.size().height * padding_height_ratio - pos_bot, src_chip.size().width, src_chip.size().height * target_ratio_height));
+			else
+				croppedImage = src_chip(cv::Rect(0, 0, src_chip.size().width, src_chip.size().height - pos_bot));
+		}
+		if (type == 4) {
+			// crop 30 * 30
+			double target_ratio_width = target_width / facChip_size[0];
+			double target_ratio_height = target_height / facChip_size[1];
+			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+			double padding_height_ratio = 0;
+			padding_height_ratio = (1 - target_ratio_height);
+			if (src_chip.size().height * padding_height_ratio - pos_bot >= 0)
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio - pos_bot, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+			else
+				croppedImage = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, 0, src_chip.size().width * target_ratio_width, src_chip.size().height - pos_bot));
+		}
+		return croppedImage;
 	}
 }
 
@@ -720,37 +1164,6 @@ std::vector<string> get_all_files_names_within_folder(std::string folder)
 	return names;
 }
 
-int find_threshold(cv::Mat src, bool bground) {
-	//Convert pixel values to other color spaces.
-	cv::Mat hsv;
-	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
-	std::vector<cv::Mat> bgr;   //destination array
-	cv::split(hsv, bgr);//split source 
-	for (int i = 0; i < 3; i++)
-		cv::equalizeHist(bgr[i], bgr[i]);
-	/// Load an image
-	cv::Mat src_gray = bgr[2];
-	for (int threshold = 40; threshold < 160; threshold += 5) {
-		cv::Mat dst;
-		cv::threshold(src_gray, dst, threshold, max_BINARY_value, cv::THRESH_BINARY);
-		int count = 0;
-		for (int i = 0; i < dst.size().height; i++) {
-			for (int j = 0; j < dst.size().width; j++) {
-				//noise
-				if ((int)dst.at<uchar>(i, j) == 0) {
-					count++;
-				}
-			}
-		}
-		float percentage = count * 1.0 / (dst.size().height * dst.size().width);
-		//std::cout << "percentage is " << percentage << std::endl;
-		if (percentage > 0.25 && !bground)
-			return threshold;
-		if (percentage > 0.25 && bground)
-			return threshold;
-	}
-}
-
 float findSkewAngle(cv::Mat src_img) {
 	// add padding
 	int padding_size = 5;
@@ -789,6 +1202,103 @@ float findSkewAngle(cv::Mat src_img) {
 		return median_q;
 	else
 		return 0;
+}
+
+cv::Mat cleanAlignedImage(cv::Mat src, float threshold) {
+	// horz
+	int count = 0;
+	cv::Mat result = src.clone();
+	for (int i = 0; i < src.size().height; i++) {
+		count = 0;
+		for (int j = 0; j < src.size().width; j++) {
+			//noise
+			if ((int)src.at<uchar>(i, j) == 0) {
+				count++;
+			}
+		}
+		if (count * 1.0 / src.size().width < threshold) {
+			for (int j = 0; j < src.size().width; j++) {
+				result.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+
+	}
+	// vertical
+	for (int i = 0; i < src.size().width; i++) {
+		count = 0;
+		for (int j = 0; j < src.size().height; j++) {
+			//noise
+			if ((int)src.at<uchar>(j, i) == 0) {
+				count++;
+			}
+		}
+		if (count * 1.0 / src.size().height < threshold) {
+			for (int j = 0; j < src.size().height; j++) {
+				result.at<uchar>(j, i) = (uchar)255;
+			}
+		}
+
+	}
+	return result;
+}
+
+void writeBackAvgColors(std::string metajson, bool bvalid, cv::Scalar bg_avg_color, cv::Scalar win_avg_color) {
+	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document doc;
+	doc.ParseStream(is);
+	fclose(fp);
+
+	// write back to json file
+	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
+	rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
+	if (doc.HasMember("valid"))
+		doc["valid"].SetBool(bvalid);
+	else
+		doc.AddMember("valid", bvalid, alloc);
+
+	rapidjson::Value bg_color_json(rapidjson::kArrayType);
+	bg_color_json.PushBack(bg_avg_color.val[0], alloc);
+	bg_color_json.PushBack(bg_avg_color.val[1], alloc);
+	bg_color_json.PushBack(bg_avg_color.val[2], alloc);
+	if (doc.HasMember("bg_color")) {
+		doc["bg_color"].Clear();
+		doc["bg_color"].PushBack(bg_avg_color.val[0], alloc);
+		doc["bg_color"].PushBack(bg_avg_color.val[1], alloc);
+		doc["bg_color"].PushBack(bg_avg_color.val[2], alloc);
+	}
+	else
+		doc.AddMember("bg_color", bg_color_json, alloc);
+
+	rapidjson::Value win_color_json(rapidjson::kArrayType);
+	win_color_json.PushBack(win_avg_color.val[0], alloc);
+	win_color_json.PushBack(win_avg_color.val[1], alloc);
+	win_color_json.PushBack(win_avg_color.val[2], alloc);
+	if (doc.HasMember("window_color")) {
+		doc["window_color"].Clear();
+		doc["window_color"].PushBack(win_avg_color.val[0], alloc);
+		doc["window_color"].PushBack(win_avg_color.val[1], alloc);
+		doc["window_color"].PushBack(win_avg_color.val[2], alloc);
+	}
+	else
+		doc.AddMember("window_color", win_color_json, alloc);
+
+	char writeBuffer[10240];
+	rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+	rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+	doc.Accept(writer);
+	fclose(fp);
+}
+
+cv::Scalar readColor(std::string metajson, std::string color_name) {
+	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document doc;
+	doc.ParseStream(is); 
+	std::vector<double>tmp_array = read1DArray(doc, color_name.c_str());
+	return cv::Scalar(tmp_array[0], tmp_array[1], tmp_array[2]);
 }
 
 cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight) {

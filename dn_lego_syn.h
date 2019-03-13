@@ -17,14 +17,7 @@
 using namespace dlib;
 
 int const max_BINARY_value = 255;
-
-cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight);
-cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, int imageDoors, double imageRelativeWidth, double imageRelativeHeight, double imageRelativeDWidth, double imageRelativeDHeight);
-
-int find_threshold(cv::Mat src, bool bground);
-
-/// Function header
-std::vector<string> get_all_files_names_within_folder(std::string folder);
+int const cluster_number = 2;
 
 double readNumber(const rapidjson::Value& node, const char* key, double default_value) {
 	if (node.HasMember(key) && node[key].IsDouble()) {
@@ -70,7 +63,31 @@ std::string readStringValue(const rapidjson::Value& node, const char* key) {
 	}
 }
 
-void process_single_chip(std::string metajson, std::string modeljson);
-cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters);
+cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight);
+cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, int imageDoors, double imageRelativeWidth, double imageRelativeHeight, double imageRelativeDWidth, double imageRelativeDHeight);
 
+/**** helper functions *****/
+std::vector<int> clustersList(std::string metajson, int regionId, std::string modelType);
+std::vector<string> get_all_files_names_within_folder(std::string folder);
+cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters);
+
+/**** steps *****/
+bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage, bool bDebug, std::string img_filename);
+cv::Mat crop_chip(cv::Mat src_chip, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height);
+cv::Mat adjust_chip(cv::Mat src_chip, cv::Mat chip, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height);
+
+bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename);
 float findSkewAngle(cv::Mat src_img);
+cv::Mat cleanAlignedImage(cv::Mat src, float threshold);
+void writeBackAvgColors(std::string metajson, bool bvalid, cv::Scalar bg_avg_color, cv::Scalar win_avg_color);
+
+std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename);
+std::vector<double> grammar1(std::string modeljson, std::vector<double> paras, bool bDebug);
+std::vector<double> grammar2(std::string modeljson, std::vector<double> paras, bool bDebug);
+std::vector<double> grammar3(std::string modeljson, std::vector<double> paras, bool bDebug);
+std::vector<double> grammar4(std::string modeljson, std::vector<double> paras, bool bDebug);
+std::vector<double> grammar5(std::string modeljson, std::vector<double> paras, bool bDebug);
+std::vector<double> grammar6(std::string modeljson, std::vector<double> paras, bool bDebug);
+
+void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, std::string img_filename, bool bDebug);
+cv::Scalar readColor(std::string metajson, std::string color_name);
