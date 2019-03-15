@@ -79,9 +79,9 @@ cv::Mat adjust_chip(cv::Mat src_chip, cv::Mat chip, int type, bool bground, std:
 bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename);
 float findSkewAngle(cv::Mat src_img);
 cv::Mat cleanAlignedImage(cv::Mat src, float threshold);
-void writeBackAvgColors(std::string metajson, bool bvalid, cv::Scalar bg_avg_color, cv::Scalar win_avg_color);
+void writeBackAvgColors(std::string metajson, cv::Scalar bg_avg_color, cv::Scalar win_avg_color);
 
-std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename, int best_class);
+std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename);
 std::vector<double> grammar1(std::string modeljson, std::vector<double> paras, bool bDebug);
 std::vector<double> grammar2(std::string modeljson, std::vector<double> paras, bool bDebug);
 std::vector<double> grammar3(std::string modeljson, std::vector<double> paras, bool bDebug);

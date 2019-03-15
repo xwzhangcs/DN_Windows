@@ -69,20 +69,20 @@ int main(int argc, const char* argv[]) {
 			std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
 			int found = tmp.find("_");
 			std::string facade_id = tmp.substr(found + 1, 4);
-			std::string metajason = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
+			std::string metajson = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
 			std::string img_filename = cluster_id + "_" + facade_id + ".png";
-			std::cout << metajason << ", "<< img_filename << std::endl;
+			std::cout << metajson << ", "<< img_filename << std::endl;
 			cv::Mat croppedImage;
-			bool bvalid = chipping(metajason, argv[3], croppedImage, true, img_filename);
+			bool bvalid = chipping(metajson, argv[3], croppedImage, true, img_filename);
 			if (bvalid) {
 				cv::Mat dnn_img;
-				segment_chip(croppedImage, dnn_img, metajason, argv[3], true, img_filename);
+				segment_chip(croppedImage, dnn_img, metajson, argv[3], true, img_filename);
 				int best_class = mymap.at(img_filename);
 				std::cout << "class is " << best_class << std::endl;
-				std::vector<double> predictions = feedDnn(dnn_img, metajason, argv[3], true, img_filename, best_class);
+				std::vector<double> predictions = feedDnn(dnn_img, metajson, argv[3], true, img_filename);
 				std::cout << "predictions size is " << predictions.size() << std::endl;
-				cv::Scalar win_avg_color = readColor(metajason, "window_color");
-				cv::Scalar bg_avg_color = readColor(metajason, "bg_color");
+				cv::Scalar win_avg_color = readColor(metajson, "window_color");
+				cv::Scalar bg_avg_color = readColor(metajson, "bg_color");
 				synthesis(predictions, croppedImage.size(), "../dnnsOut", win_avg_color, bg_avg_color, img_filename, true);
 
 			}
@@ -221,6 +221,38 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	// adjust the chip
 	if (type == 2 || type == 3 || type == 4)
 		croppedImage = adjust_chip(src_chip, croppedImage, type, bground, facChip_size, target_width, target_height);
+	{
+		// write back to json file
+		fp = fopen(metajson.c_str(), "wb"); // non-Windows use "w"
+		rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
+		if (doc.HasMember("valid"))
+			doc["valid"].SetBool(bvalid);
+		else
+			doc.AddMember("valid", bvalid, alloc);
+		// add real chip size
+		int src_width = src_chip.size().width;
+		int src_height = src_chip.size().height;
+		int chip_width = croppedImage.size().width;
+		int chip_height = croppedImage.size().height;
+		if (doc.HasMember("chip_size")) {
+			doc["chip_size"].Clear();
+			doc["chip_size"].PushBack(chip_width * 1.0 / src_width * facChip_size[0], alloc);
+			doc["chip_size"].PushBack(chip_height * 1.0 / src_height * facChip_size[1], alloc);
+
+		}
+		else {
+			rapidjson::Value chip_json(rapidjson::kArrayType);
+			chip_json.PushBack(chip_width * 1.0 / src_width * facChip_size[0], alloc);
+			chip_json.PushBack(chip_height * 1.0 / src_height * facChip_size[1], alloc);
+			doc.AddMember("chip_size", chip_json, alloc);
+		}
+
+		char writeBuffer[10240];
+		rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+		rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+		doc.Accept(writer);
+		fclose(fp);
+	}
 	if (bDebug) {
 		// get facade folder path
 		std::string facades_folder = readStringValue(docModel, "facadesFolder");
@@ -384,12 +416,12 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, 
 			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
 		}
 	}
-	writeBackAvgColors(metajson, true, bg_avg_color, win_avg_color);
+	writeBackAvgColors(metajson, bg_avg_color, win_avg_color);
 
 	return true;
 }
 
-std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename, int best_class) {
+std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
 	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
 	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
@@ -419,9 +451,9 @@ std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string m
 	std::vector<torch::jit::IValue> inputs;
 	inputs.push_back(img_tensor);
 
-	if(false)
+	int best_class = -1;
+	if(true)
 	{
-		int best_class = 1;
 		// Deserialize the ScriptModule from a file using torch::jit::load().
 		std::shared_ptr<torch::jit::script::Module> classifier_module = torch::jit::load(classifier_name);
 		classifier_module->to(at::kCUDA);
@@ -503,14 +535,29 @@ std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string m
 		int img_groups = predictions[2];
 		double relative_width = predictions[3];
 		double relative_height = predictions[4];
-
-		rapidjson::Value paras_json(rapidjson::kObjectType);
-		paras_json.AddMember("rows", img_rows, alloc);
-		paras_json.AddMember("cols", img_cols, alloc);
-		paras_json.AddMember("grouping", img_groups, alloc);
-		paras_json.AddMember("relativeWidth", relative_width, alloc);
-		paras_json.AddMember("relativeHeight", relative_height, alloc);
-		doc.AddMember("paras", paras_json, alloc);
+		if (doc.HasMember("grammar")) {
+			doc["grammar"].SetInt(best_class);
+		}
+		else {
+			doc.AddMember("grammar", best_class, alloc);
+		}
+		if (doc.HasMember("paras")) {
+			doc["paras"]["rows"].SetInt(img_rows);
+			doc["paras"]["cols"].SetInt(img_cols);
+			doc["paras"]["grouping"].SetInt(img_groups);
+			doc["paras"]["relativeWidth"].SetDouble(relative_width);
+			doc["paras"]["relativeHeight"].SetDouble(relative_height);
+		}
+		else {
+			rapidjson::Value paras_json(rapidjson::kObjectType);
+			paras_json.AddMember("rows", img_rows, alloc);
+			paras_json.AddMember("cols", img_cols, alloc);
+			paras_json.AddMember("grouping", img_groups, alloc);
+			paras_json.AddMember("relativeWidth", relative_width, alloc);
+			paras_json.AddMember("relativeHeight", relative_height, alloc);
+			doc.AddMember("paras", paras_json, alloc);
+		}
+			
 	}
 	if (predictions.size() == 8) {
 		int img_rows = predictions[0];
@@ -522,16 +569,35 @@ std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string m
 		double relative_door_width = predictions[6];
 		double relative_door_height = predictions[7];
 
-		rapidjson::Value paras_json(rapidjson::kObjectType);
-		paras_json.AddMember("rows", img_rows, alloc);
-		paras_json.AddMember("cols", img_cols, alloc);
-		paras_json.AddMember("grouping", img_groups, alloc);
-		paras_json.AddMember("doors", img_doors, alloc);
-		paras_json.AddMember("relativeWidth", relative_width, alloc);
-		paras_json.AddMember("relativeHeight", relative_height, alloc);
-		paras_json.AddMember("relativeDWidth", relative_door_width, alloc);
-		paras_json.AddMember("relativeDHeight", relative_door_height, alloc);
-		doc.AddMember("paras", paras_json, alloc);
+		if (doc.HasMember("grammar")) {
+			doc["grammar"].SetInt(best_class);
+		}
+		else {
+			doc.AddMember("grammar", best_class, alloc);
+		}
+		if (doc.HasMember("paras")) {
+			doc["paras"]["rows"].SetInt(img_rows);
+			doc["paras"]["cols"].SetInt(img_cols);
+			doc["paras"]["grouping"].SetInt(img_groups);
+			doc["paras"]["doors"].SetInt(img_doors);
+			doc["paras"]["relativeWidth"].SetDouble(relative_width);
+			doc["paras"]["relativeHeight"].SetDouble(relative_height);
+			doc["paras"]["relativeDWidth"].SetDouble(relative_door_width);
+			doc["paras"]["relativeDHeight"].SetDouble(relative_door_height);
+		}
+		else {
+			rapidjson::Value paras_json(rapidjson::kObjectType);
+			paras_json.AddMember("rows", img_rows, alloc);
+			paras_json.AddMember("cols", img_cols, alloc);
+			paras_json.AddMember("grouping", img_groups, alloc);
+			paras_json.AddMember("doors", img_doors, alloc);
+			paras_json.AddMember("relativeWidth", relative_width, alloc);
+			paras_json.AddMember("relativeHeight", relative_height, alloc);
+			paras_json.AddMember("relativeDWidth", relative_door_width, alloc);
+			paras_json.AddMember("relativeDHeight", relative_door_height, alloc);
+			doc.AddMember("paras", paras_json, alloc);
+		}
+
 	}
 	char writeBuffer[10240];
 	rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
@@ -1340,7 +1406,7 @@ cv::Mat cleanAlignedImage(cv::Mat src, float threshold) {
 	return result;
 }
 
-void writeBackAvgColors(std::string metajson, bool bvalid, cv::Scalar bg_avg_color, cv::Scalar win_avg_color) {
+void writeBackAvgColors(std::string metajson, cv::Scalar bg_avg_color, cv::Scalar win_avg_color) {
 	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
 	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
@@ -1351,11 +1417,6 @@ void writeBackAvgColors(std::string metajson, bool bvalid, cv::Scalar bg_avg_col
 	// write back to json file
 	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
 	rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
-	if (doc.HasMember("valid"))
-		doc["valid"].SetBool(bvalid);
-	else
-		doc.AddMember("valid", bvalid, alloc);
-
 	rapidjson::Value bg_color_json(rapidjson::kArrayType);
 	bg_color_json.PushBack(bg_avg_color.val[0], alloc);
 	bg_color_json.PushBack(bg_avg_color.val[1], alloc);
