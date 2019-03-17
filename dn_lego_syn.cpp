@@ -6,61 +6,47 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	// D3
 	{
 		std::map<std::string, int> mymap;
-		mymap.insert(std::pair<std::string, int>("0001_0017.png", 1));
-		mymap.insert(std::pair<std::string, int>("0001_0018.png", 1));
-		mymap.insert(std::pair<std::string, int>("0001_0022.png", 2));
-		mymap.insert(std::pair<std::string, int>("0001_0042.png", 2));
-		mymap.insert(std::pair<std::string, int>("0001_0051.png", 1));
+		mymap.insert(std::pair<std::string, int>("0001_0025.png", 5));
+		mymap.insert(std::pair<std::string, int>("0001_0043.png", 6));
+		mymap.insert(std::pair<std::string, int>("0001_0061.png", 5));
+		mymap.insert(std::pair<std::string, int>("0001_0069.png", 6));
+		mymap.insert(std::pair<std::string, int>("0002_0055.png", 1));
 
-		mymap.insert(std::pair<std::string, int>("0001_0061.png", 1));
-		mymap.insert(std::pair<std::string, int>("0002_0041.png", 1));
-		mymap.insert(std::pair<std::string, int>("0003_0015.png", 3));
-		mymap.insert(std::pair<std::string, int>("0004_0011.png", 6));
-		mymap.insert(std::pair<std::string, int>("0005_0008.png", 3));
+		mymap.insert(std::pair<std::string, int>("0002_0062.png", 1));
+		mymap.insert(std::pair<std::string, int>("0003_0027.png", 1));
+		mymap.insert(std::pair<std::string, int>("0009_0020.png", 2));
+		mymap.insert(std::pair<std::string, int>("0009_0034.png", 2));
+		mymap.insert(std::pair<std::string, int>("0011_0004.png", 2));
 
-		mymap.insert(std::pair<std::string, int>("0005_0031.png", 1));
-		mymap.insert(std::pair<std::string, int>("0005_0058.png", 1));
-		mymap.insert(std::pair<std::string, int>("0005_0078.png", 1));
-		mymap.insert(std::pair<std::string, int>("0009_0045.png", 5));
-		mymap.insert(std::pair<std::string, int>("0009_0052.png", 5));
+		mymap.insert(std::pair<std::string, int>("0011_0012.png", 2));
+		mymap.insert(std::pair<std::string, int>("0011_0013.png", 1));
+		mymap.insert(std::pair<std::string, int>("0012_0027.png", 1));
+		mymap.insert(std::pair<std::string, int>("0013_0010.png", 2));
+		mymap.insert(std::pair<std::string, int>("0013_0017.png", 1));
 
-		mymap.insert(std::pair<std::string, int>("0010_0031.png", 1));
-		mymap.insert(std::pair<std::string, int>("0011_0045.png", 1));
-		mymap.insert(std::pair<std::string, int>("0013_0005.png", 2));
-		mymap.insert(std::pair<std::string, int>("0013_0013.png", 2));
-		mymap.insert(std::pair<std::string, int>("0015_0017.png", 1));
+		mymap.insert(std::pair<std::string, int>("0014_0058.png", 1));
+		mymap.insert(std::pair<std::string, int>("0015_0009.png", 1));
+		mymap.insert(std::pair<std::string, int>("0015_0010.png", 2));
+		mymap.insert(std::pair<std::string, int>("0015_0020.png", 2));
+		mymap.insert(std::pair<std::string, int>("0015_0022.png", 1));
 
-		mymap.insert(std::pair<std::string, int>("0017_0018.png", 1));
-		mymap.insert(std::pair<std::string, int>("0017_0052.png", 2));
-		mymap.insert(std::pair<std::string, int>("0021_0025.png", 6));
-		mymap.insert(std::pair<std::string, int>("0022_0025.png", 4));
-		mymap.insert(std::pair<std::string, int>("0023_0014.png", 5));
+		mymap.insert(std::pair<std::string, int>("0021_0011.png", 1));
+		mymap.insert(std::pair<std::string, int>("0023_0033.png", 2));
+		mymap.insert(std::pair<std::string, int>("0024_0022.png", 6));
+		mymap.insert(std::pair<std::string, int>("0024_0032.png", 4));
+		mymap.insert(std::pair<std::string, int>("0024_0033.png", 5));
 
-		mymap.insert(std::pair<std::string, int>("0023_0023.png", 5));
-		mymap.insert(std::pair<std::string, int>("0023_0026.png", 1));
-		mymap.insert(std::pair<std::string, int>("0023_0027.png", 5));
-		mymap.insert(std::pair<std::string, int>("0025_0003.png", 2));
-		mymap.insert(std::pair<std::string, int>("0025_0011.png", 2));
+		mymap.insert(std::pair<std::string, int>("0028_0035.png", 5));
+		mymap.insert(std::pair<std::string, int>("0029_0020.png", 1));
+		mymap.insert(std::pair<std::string, int>("0035_0007.png", 5));
+		mymap.insert(std::pair<std::string, int>("0035_0010.png", 2));
+		mymap.insert(std::pair<std::string, int>("0038_0004.png", 2));
 
-		mymap.insert(std::pair<std::string, int>("0032_0016.png", 2));
-		mymap.insert(std::pair<std::string, int>("0033_0009.png", 2));
-		mymap.insert(std::pair<std::string, int>("0033_0010.png", 2));
-		mymap.insert(std::pair<std::string, int>("0033_0021.png", 2));
-		mymap.insert(std::pair<std::string, int>("0037_0004.png", 5));
-
-		mymap.insert(std::pair<std::string, int>("0039_0009.png", 5));
-		mymap.insert(std::pair<std::string, int>("0039_0011.png", 2));
-		mymap.insert(std::pair<std::string, int>("0040_0016.png", 1));
-		mymap.insert(std::pair<std::string, int>("0041_0013.png", 2));
-		mymap.insert(std::pair<std::string, int>("0041_0014.png", 2));
-
-		mymap.insert(std::pair<std::string, int>("0042_0009.png", 1));
-		mymap.insert(std::pair<std::string, int>("0055_0009.png", 1));
-		mymap.insert(std::pair<std::string, int>("0055_0022.png", 1));
-		mymap.insert(std::pair<std::string, int>("0059_0007.png", 1));
-		mymap.insert(std::pair<std::string, int>("0061_0008.png", 1));
+		mymap.insert(std::pair<std::string, int>("0047_0003.png", 2));
+		mymap.insert(std::pair<std::string, int>("0047_0008.png", 2));
 
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
@@ -69,9 +55,9 @@ int main(int argc, const char* argv[]) {
 			std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
 			int found = tmp.find("_");
 			std::string facade_id = tmp.substr(found + 1, 4);
-			std::string metajson = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
+			std::string metajson = "output/D3/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
 			std::string img_filename = cluster_id + "_" + facade_id + ".png";
-			std::cout << metajson << ", "<< img_filename << std::endl;
+			std::cout << metajson << ", " << img_filename << std::endl;
 			cv::Mat croppedImage;
 			bool bvalid = chipping(metajson, argv[3], croppedImage, true, img_filename);
 			if (bvalid) {
@@ -89,8 +75,92 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+	//// D4
+	//{
+	//	std::map<std::string, int> mymap;
+	//	mymap.insert(std::pair<std::string, int>("0001_0017.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0001_0018.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0001_0022.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0001_0042.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0001_0051.png", 1));
+
+	//	mymap.insert(std::pair<std::string, int>("0001_0061.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0002_0041.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0003_0015.png", 3));
+	//	mymap.insert(std::pair<std::string, int>("0004_0011.png", 6));
+	//	mymap.insert(std::pair<std::string, int>("0005_0008.png", 1));
+
+	//	mymap.insert(std::pair<std::string, int>("0005_0031.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0005_0058.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0005_0078.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0009_0045.png", 5));
+	//	mymap.insert(std::pair<std::string, int>("0009_0052.png", 5));
+
+	//	mymap.insert(std::pair<std::string, int>("0010_0031.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0011_0045.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0013_0005.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0013_0013.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0015_0017.png", 1));
+
+	//	mymap.insert(std::pair<std::string, int>("0017_0018.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0017_0052.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0021_0025.png", 6));
+	//	mymap.insert(std::pair<std::string, int>("0022_0025.png", 4));
+	//	mymap.insert(std::pair<std::string, int>("0023_0014.png", 5));
+
+	//	mymap.insert(std::pair<std::string, int>("0023_0023.png", 5));
+	//	mymap.insert(std::pair<std::string, int>("0023_0026.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0023_0027.png", 5));
+	//	mymap.insert(std::pair<std::string, int>("0025_0003.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0025_0011.png", 2));
+
+	//	mymap.insert(std::pair<std::string, int>("0032_0016.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0033_0009.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0033_0010.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0033_0021.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0037_0004.png", 5));
+
+	//	mymap.insert(std::pair<std::string, int>("0039_0009.png", 5));
+	//	mymap.insert(std::pair<std::string, int>("0039_0011.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0040_0016.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0041_0013.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0041_0014.png", 2));
+
+	//	mymap.insert(std::pair<std::string, int>("0042_0009.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0055_0009.png", 2));
+	//	mymap.insert(std::pair<std::string, int>("0055_0022.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0059_0007.png", 1));
+	//	mymap.insert(std::pair<std::string, int>("0061_0008.png", 2));
+
+	//	std::string path("../data/test");
+	//	std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
+	//	for (int i = 0; i < imageFiles.size(); i++) {
+	//		std::string cluster_id = imageFiles[i].substr(0, imageFiles[i].find("_"));
+	//		std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
+	//		int found = tmp.find("_");
+	//		std::string facade_id = tmp.substr(found + 1, 4);
+	//		std::string metajson = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
+	//		std::string img_filename = cluster_id + "_" + facade_id + ".png";
+	//		std::cout << metajson << ", "<< img_filename << std::endl;
+	//		cv::Mat croppedImage;
+	//		bool bvalid = chipping(metajson, argv[3], croppedImage, true, img_filename);
+	//		if (bvalid) {
+	//			cv::Mat dnn_img;
+	//			segment_chip(croppedImage, dnn_img, metajson, argv[3], true, img_filename);
+	//			int best_class = mymap.at(img_filename);
+	//			std::cout << "class is " << best_class << std::endl;
+	//			std::vector<double> predictions = feedDnn(dnn_img, metajson, argv[3], true, img_filename);
+	//			std::cout << "predictions size is " << predictions.size() << std::endl;
+	//			cv::Scalar win_avg_color = readColor(metajson, "window_color");
+	//			cv::Scalar bg_avg_color = readColor(metajson, "bg_color");
+	//			synthesis(predictions, croppedImage.size(), "../dnnsOut", win_avg_color, bg_avg_color, img_filename, true);
+
+	//		}
+	//	}
+	//}
+	//return 0;
 	std::string path(argv[1]);
-	std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
+	std::vector<int> clustersID = clustersList(argv[2], 3, "cgv_r");
 	std::vector<std::string> clusters;
 	clusters.resize(clustersID.size());
 	for (int i = 0; i < clustersID.size(); i++) {
@@ -102,8 +172,11 @@ int main(int argc, const char* argv[]) {
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
-			std::string metajason = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-			std::cout << metajason << std::endl;
+			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+			std::string img_filename = metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+			std::cout << metajson << ", " << img_filename << std::endl;
+			cv::Mat croppedImage;
+			bool bvalid = chipping(metajson, argv[3], croppedImage, true, img_filename);
 		}
 	}
 	return 0;
