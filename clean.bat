@@ -5,7 +5,7 @@ del dnnsIn\*.png
 del dnnsOut\*.png
 del dnnsHisteq\*.png
 del facades\*.png
-del facadehist\*.png
+del facadeshist\*.png
 del aligns\*.png
 del segs\*.png
 del resizes\*.png
