@@ -57,7 +57,9 @@
 		}
 	},
 	"facadesFolder":"../facades",
+	"facadesHisteqFolder":"../facadeshist",
 	"chipsFolder":"../chips",
+	"chipsFolderHisteq":"../chipshist",
 	"segsFolder":"../segs",
 	"resizesFolder":"../resizes",
 	"dilatesFolder":"../dilates",

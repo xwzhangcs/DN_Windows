@@ -18,5 +18,8 @@ D3/
 histeq/
 chipshist/
 facadeshist/
+dnnsHisteq/
+invalid_facades/
+invalid_facadesHisteq/
 thresholds.txt
 grounds.txt
