@@ -13,3 +13,4 @@ del invalid_facades\*.png
 del invalid_facadesHisteq\*.png
 del score.txt
 del confidence.txt
+del index.html
