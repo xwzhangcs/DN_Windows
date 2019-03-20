@@ -11,3 +11,5 @@ del segs\*.png
 del resizes\*.png
 del invalid_facades\*.png
 del invalid_facadesHisteq\*.png
+del score.txt
+del confidence.txt
