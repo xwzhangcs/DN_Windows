@@ -17,7 +17,7 @@ from skimage.measure import compare_ssim as ssim
 from skimage import io
 
 
-def main(facades_dir, facadehist_dir, chips_dir, chiphist_dir, segs_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, dnnshist_dir, html_file_name):
+def main(facades_dir, score_file, chips_dir, chiphist_dir, confidence_file, segs_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, dnnshist_dir, html_file_name):
 
 	# Create the html file
 	html_file = "<html>\n"
@@ -56,9 +56,11 @@ def main(facades_dir, facadehist_dir, chips_dir, chiphist_dir, segs_dir, algins_
 	html_file += "    <tr>\n"
 	html_file += "      <th>Image.</th>\n"
 	html_file += "      <th>Real Facade.</th>\n"
-	html_file += "      <th>Facade histeq.</th>\n"
+	# html_file += "      <th>Facade histeq.</th>\n"
+	html_file += "      <th>Score.</th>\n"
 	html_file += "      <th>Chip.</th>\n"
 	html_file += "      <th>Chip histeq.</th>\n"
+	html_file += "      <th>Confidence.</th>\n"
 	html_file += "      <th>Segmented.</th>\n"
 	html_file += "      <th>Post-processed.</th>\n"
 	html_file += "      <th>DNN In.</th>\n"
@@ -66,9 +68,11 @@ def main(facades_dir, facadehist_dir, chips_dir, chiphist_dir, segs_dir, algins_
 	html_file += "      <th>DNN Histeq.</th>\n"
 
 	facades = sorted(os.listdir(facades_dir))
+	df_score = pd.read_csv(score_file)
+	df_conf = pd.read_csv(confidence_file)
 	for i in range(len(facades)):
 		facade_file = facades_dir + '/' + facades[i]
-		facadehist_file = facadehist_dir + '/' + facades[i]
+		# facadehist_file = facadehist_dir + '/' + facades[i]
 		chip_file = chips_dir + '/' + facades[i]
 		chiphist_file = chiphist_dir + '/' + facades[i]
 		seg_file = segs_dir + '/' + facades[i]
@@ -79,10 +83,11 @@ def main(facades_dir, facadehist_dir, chips_dir, chiphist_dir, segs_dir, algins_
 		html_file += "    <tr>\n"
 		html_file += "      <td>" + facades[i] + "</td>\n"
 		html_file += "      <td><a href=\"" + facade_file + "\"><img src=\"" + facade_file + "\"/></a></td>\n"
-		html_file += "      <td><a href=\"" + facadehist_file + "\"><img src=\"" + facadehist_file + "\"/></a></td>\n"
-		# html_file += "      <td>" + str(df_ground.loc[df['image'] == facades[i]].iloc[0, 1]) + "</td>\n"
+		# html_file += "      <td><a href=\"" + facadehist_file + "\"><img src=\"" + facadehist_file + "\"/></a></td>\n"
+		html_file += "      <td>" + str(df_score.loc[df_score['image'] == facades[i]].iloc[0, 1]) + "</td>\n"
 		html_file += "      <td><a href=\"" + chip_file + "\"><img src=\"" + chip_file + "\"/></a></td>\n"
 		html_file += "      <td><a href=\"" + chiphist_file + "\"><img src=\"" + chiphist_file + "\"/></a></td>\n"
+		html_file += "      <td>" + str(df_conf.loc[df_conf['image'] == facades[i]].iloc[0, 1]) + "</td>\n"
 		html_file += "      <td><a href=\"" + seg_file + "\"><img src=\"" + seg_file + "\"/></a></td>\n"
 		html_file += "      <td><a href=\"" + post_file + "\"><img src=\"" + post_file + "\"/></a></td>\n"
 		html_file += "      <td><a href=\"" + dnnIn_file + "\"><img src=\"" + dnnIn_file + "\"/></a></td>\n"
@@ -102,9 +107,11 @@ def main(facades_dir, facadehist_dir, chips_dir, chiphist_dir, segs_dir, algins_
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("facades_dir", help="path to input image folder (e.g., input_data)")
-	parser.add_argument("facadehist_dir", help="path to input image folder (e.g., input_data)")
+	# parser.add_argument("facadehist_dir", help="path to input image folder (e.g., input_data)")
+	parser.add_argument("score_file", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("chips_dir", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("chiphist_dir", help="path to input image folder (e.g., input_data)")
+	parser.add_argument("confidence_file", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("segs_dir", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("algins_dir", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("dnnsIn_dir", help="path to input image folder (e.g., input_data)")
@@ -113,4 +120,4 @@ if __name__ == "__main__":
 	parser.add_argument("html_file_name", help="path to output html filename")
 	args = parser.parse_args()
 
-	main(args.facades_dir, args.facadehist_dir, args.chips_dir, args.chiphist_dir, args.segs_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.dnnshist_dir, args.html_file_name)
+	main(args.facades_dir, args.score_file, args.chips_dir, args.chiphist_dir, args.confidence_file, args.segs_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.dnnshist_dir, args.html_file_name)
