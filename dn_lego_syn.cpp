@@ -9,7 +9,7 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	/*{
+	{
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
 		for (int i = 0; i < imageFiles.size(); i++) {
@@ -36,7 +36,7 @@ int main(int argc, const char* argv[]) {
 			}
 		}
 	}
-	return 0;*/
+	return 0;
 	std::string path(argv[1]);
 	std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
 	std::vector<std::string> clusters;
@@ -1109,7 +1109,21 @@ cv::Mat crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bgroun
 			// output best img
 			cv::Mat best_cropped_tmp = src_chip(cv::Rect(0, src_chip.size().height * best_id * 0.1, src_chip.size().width, src_chip.size().height * target_ratio_height));
 			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			return best_cropped;
+			if(bground) {
+				// check the grammar of the last chip
+				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * (1 - target_ratio_height), src_chip.size().width, src_chip.size().height * target_ratio_height));
+				cv::Mat tmp_adjust = adjust_chip(tmp);
+				// get confidence value for the cropped img
+				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
+				if (grammar_type % 2 == 0) {// doors
+					return tmp_adjust;
+				}
+				else {
+					return best_cropped;
+				}
+			}
+			else
+				return best_cropped;
 		}
 	}
 	else if (type == 4) {
@@ -1170,7 +1184,22 @@ cv::Mat crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bgroun
 			// output best img
 			cv::Mat  best_cropped_tmp = src_chip(cv::Rect(src_chip.size().width * best_id * 0.1, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			return best_cropped;
+			if (bground) {
+				double padding_width_ratio = (1 - target_ratio_width) * 0.5;
+				padding_height_ratio = (1 - target_ratio_height);
+				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+				cv::Mat tmp_adjust = adjust_chip(tmp);
+				// get confidence value for the cropped img
+				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
+				if (grammar_type % 2 == 0) {// doors
+					return tmp_adjust;
+				}
+				else {
+					return best_cropped;
+				}
+			}
+			else 
+				return best_cropped;
 		}
 		else {
 			// check multiple chips and choose the one that has the highest confidence value
@@ -1202,7 +1231,21 @@ cv::Mat crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bgroun
 			// output best img
 			cv::Mat  best_cropped_tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * best_id * 0.1, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			return best_cropped;
+			if (bground) {
+				double padding_height_ratio = (1 - target_ratio_height);
+				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
+				cv::Mat tmp_adjust = adjust_chip(tmp);
+				// get confidence value for the cropped img
+				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
+				if (grammar_type % 2 == 0) {// doors
+					return tmp_adjust;
+				}
+				else {
+					return best_cropped;
+				}
+			}
+			else
+				return best_cropped;
 		}
 	}
 	else {
