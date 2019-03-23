@@ -10,6 +10,18 @@ int main(int argc, const char* argv[]) {
 		return -1;
 	}
 	{
+		cv::Mat src_chip = cv::imread("../data/0001_0022.png");
+		{
+			cv::Mat hsv_src;
+			cvtColor(src_chip, hsv_src, cv::COLOR_BGR2HSV);
+			std::vector<cv::Mat> bgr;   //destination array
+			cv::split(hsv_src, bgr);//split source 
+			cv::equalizeHist(bgr[2], bgr[2]);
+			cv::imwrite("../data/output.png",bgr[2]);
+		}
+	}
+	return 0;
+	{
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
 		for (int i = 0; i < imageFiles.size(); i++) {
