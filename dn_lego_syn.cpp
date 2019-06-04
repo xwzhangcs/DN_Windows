@@ -2,6 +2,7 @@
 #include "dn_lego_syn.h"
 #include <stack>
 #include "Utils.h"
+#include "dn_lego_eval.h"
 #include "optGrammarParas.h"
 
 int main(int argc, const char* argv[]) {
@@ -9,6 +10,9 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	FacadeSeg eval;
+	eval.eval();
+	return 0;
 	{
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
@@ -1053,6 +1057,270 @@ std::vector<double> compute_door_paras(cv::Mat croppedImage, std::string modeljs
 		return predictions;
 	}
 }
+
+void generateSegOutAndDnnOut(std::string chip_img_file, std::string modeljson, std::string segOut_file_name, std::string dnnOut_file_name, bool bDebug){
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	// default size for NN
+	int height = 224; // DNN image height
+	int width = 224; // DNN image width
+	std::vector<double> tmp_array = util::read1DArray(docModel, "defaultSize");
+	width = tmp_array[0];
+	height = tmp_array[1];
+	// load image
+	cv::Mat src, dst_ehist, dst_classify;
+	src = cv::imread(chip_img_file);
+	cv::Mat hsv;
+	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
+	std::vector<cv::Mat> bgr;   //destination array
+	cv::split(hsv, bgr);//split source 
+	for (int i = 0; i < 3; i++)
+		cv::equalizeHist(bgr[i], bgr[i]);
+	dst_ehist = bgr[2];
+	int threshold = 0;
+	// kkmeans classification
+	dst_classify = facade_clustering_kkmeans(dst_ehist, cluster_number);
+	// generate input image for DNN
+	cv::Scalar bg_color(255, 255, 255); // white back ground
+	cv::Scalar window_color(0, 0, 0); // black for windows
+	cv::Mat scale_img;
+	cv::resize(dst_classify, scale_img, cv::Size(width, height));
+	// correct the color
+	for (int i = 0; i < scale_img.size().height; i++) {
+		for (int j = 0; j < scale_img.size().width; j++) {
+			//noise
+			if ((int)scale_img.at<uchar>(i, j) < 128) {
+				scale_img.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				scale_img.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+
+	// dilate to remove noises
+	int dilation_type = cv::MORPH_RECT;
+	cv::Mat dilation_dst;
+	int kernel_size = 3;
+	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+	/// Apply the dilation operation
+	cv::dilate(scale_img, dilation_dst, element);
+
+	// alignment
+	cv::Mat aligned_img = deSkewImg(dilation_dst);
+	// add padding
+	int padding_size = 5;
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Scalar value(255, 255, 255);
+	cv::Mat aligned_img_padding;
+	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
+
+	// find contours
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+	std::vector<cv::Rect> boundRect(contours.size());
+	std::vector<std::vector<cv::Rect>> largestRect(contours.size());
+	std::vector<bool> bIntersectionbbox(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		bIntersectionbbox[i] = false;
+	}
+	// find the largest rectangles
+	cv::Mat drawing(aligned_img_padding.size(), CV_8UC3, bg_color);
+	for (int i = 0; i< contours.size(); i++)
+	{
+		if (hierarchy[i][3] != 0) continue;
+		cv::Mat tmp(aligned_img_padding.size(), CV_8UC3, window_color);
+		drawContours(tmp, contours, i, bg_color, -1, 8, hierarchy, 0, cv::Point());
+		cv::Mat tmp_gray;
+		cvtColor(tmp, tmp_gray, cv::COLOR_BGR2GRAY);
+		cv::Rect tmp_rect = findLargestRectangle(tmp_gray);
+		largestRect[i].push_back(tmp_rect);
+		float area_contour = cv::contourArea(contours[i]);
+		float area_rect = 0;
+		area_rect += tmp_rect.width * tmp_rect.height;
+		float ratio = area_rect / area_contour;
+		while (ratio < 0.90) { // find more largest rectangles in the rest area
+							   // clear up the previous rectangles
+			tmp_gray.empty();
+			cv::rectangle(tmp, cv::Point(tmp_rect.tl().x, tmp_rect.tl().y), cv::Point(tmp_rect.br().x, tmp_rect.br().y), window_color, -1);
+			cvtColor(tmp, tmp_gray, cv::COLOR_BGR2GRAY);
+			tmp_rect = findLargestRectangle(tmp_gray);
+			area_rect += tmp_rect.width * tmp_rect.height;
+			if (tmp_rect.width * tmp_rect.height > 100)
+				largestRect[i].push_back(tmp_rect);
+			ratio = area_rect / area_contour;
+		}
+	}
+	// check intersection
+	for (int i = 0; i < contours.size(); i++) {
+		if (hierarchy[i][3] != 0 || bIntersectionbbox[i]) {
+			bIntersectionbbox[i] = true;
+			continue;
+		}
+		for (int j = i + 1; j < contours.size(); j++) {
+			if (findIntersection(boundRect[i], boundRect[j])) {
+				bIntersectionbbox[i] = true;
+				bIntersectionbbox[j] = true;
+				break;
+			}
+		}
+	}
+	//
+	cv::Mat dnn_img(aligned_img_padding.size(), CV_8UC3, bg_color);
+	int num_contours = 0;
+	double largest_rec_area = 0;
+	double largest_ratio = 0;
+	for (int i = 1; i< contours.size(); i++)
+	{
+		if (hierarchy[i][3] != 0) continue;
+		// check the validity of the rect
+		float area_contour = cv::contourArea(contours[i]);
+		float area_rect = boundRect[i].width * boundRect[i].height;
+		if (area_rect < 80 || area_contour < 80) continue;
+		num_contours++;
+		float ratio = area_contour / area_rect;
+		if (!bIntersectionbbox[i] /*&& (ratio > 0.60 || area_contour < 160)*/) {
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+			if (largest_rec_area < area_rect)
+				largest_rec_area = area_rect;
+		}
+		else {
+			for (int j = 0; j < 1; j++)
+				cv::rectangle(dnn_img, cv::Point(largestRect[i][j].tl().x, largestRect[i][j].tl().y), cv::Point(largestRect[i][j].br().x, largestRect[i][j].br().y), window_color, -1);
+			if (largest_rec_area < area_contour)
+				largest_rec_area = area_contour;
+		}
+	}
+	largest_ratio = largest_rec_area / (aligned_img_padding.size().width * aligned_img_padding.size().height);
+	// remove padding
+	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
+	// feed DNN
+	rapidjson::Value& grammars = docModel["grammars"];
+	// classifier
+	rapidjson::Value& grammar_classifier = grammars["classifier"];
+	// path of DN model
+	std::string classifier_name = util::readStringValue(grammar_classifier, "model");
+	int num_classes = util::readNumber(grammar_classifier, "number_paras", 6);
+	if (bDebug) {
+		std::cout << "classifier_name is " << classifier_name << std::endl;
+	}
+	cv::Mat dnn_img_rgb;
+	cv::cvtColor(dnn_img, dnn_img_rgb, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+
+	// Deserialize the ScriptModule from a file using torch::jit::load().
+	std::shared_ptr<torch::jit::script::Module> classifier_module = torch::jit::load(classifier_name);
+	classifier_module->to(at::kCUDA);
+	assert(classifier_module != nullptr);
+	torch::Tensor out_tensor = classifier_module->forward(inputs).toTensor();
+	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+	if (bDebug)
+		std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
+
+	double best_score = 0;
+	int best_class = -1;
+	for (int i = 0; i < num_classes; i++) {
+		double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+		if (tmp > best_score) {
+			best_score = tmp;
+			best_class = i;
+		}
+	}
+	best_class = best_class + 1;
+	fclose(fp);
+
+	std::string model_name;
+	std::string grammar_name = "grammar" + std::to_string(best_class);
+	rapidjson::Value& grammar = grammars[grammar_name.c_str()];
+	// path of DN model
+	model_name = util::readStringValue(grammar, "model");
+	if (bDebug)
+		std::cout << "model_name is " << model_name << std::endl;
+	// number of paras
+	int num_paras = util::readNumber(grammar, "number_paras", 5);
+
+	std::shared_ptr<torch::jit::script::Module> module = torch::jit::load(model_name);
+	module->to(at::kCUDA);
+	assert(module != nullptr);
+	torch::Tensor out_tensor_grammar = module->forward(inputs).toTensor();
+	std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
+	std::vector<double> paras;
+	for (int i = 0; i < num_paras; i++) {
+		paras.push_back(out_tensor_grammar.slice(1, i, i + 1).item<float>());
+	}
+	for (int i = 0; i < num_paras; i++) {
+		if (paras[i] < 0)
+			paras[i] = 0;
+	}
+
+	std::vector<double> predictions;
+	if (best_class == 1) {
+		predictions = util::grammar1(modeljson, paras, bDebug);
+	}
+	else if (best_class == 2) {
+		predictions = util::grammar2(modeljson, paras, bDebug);
+	}
+	else if (best_class == 3) {
+		predictions = util::grammar3(modeljson, paras, bDebug);
+	}
+	else if (best_class == 4) {
+		predictions = util::grammar4(modeljson, paras, bDebug);
+	}
+	else if (best_class == 5) {
+		predictions = util::grammar5(modeljson, paras, bDebug);
+	}
+	else if (best_class == 6) {
+		predictions = util::grammar6(modeljson, paras, bDebug);
+	}
+	else {
+		//do nothing
+		predictions = util::grammar1(modeljson, paras, bDebug);
+	}
+
+	// synthetic img
+	cv::Mat syn_img;
+	if (predictions.size() == 5) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		double relative_width = predictions[3];
+		double relative_height = predictions[4];
+		syn_img = util::generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, relative_width, relative_height);
+	}
+	if(predictions.size() == 8) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		int img_doors = predictions[3];
+		double relative_width = predictions[4];
+		double relative_height = predictions[5];
+		double relative_door_width = predictions[6];
+		double relative_door_height = predictions[7];
+		syn_img = util::generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height);
+	}
+	// recover to the original image
+	cv::resize(syn_img, syn_img, src.size());
+	if (bDebug) {
+		cv::imwrite(segOut_file_name, dst_classify);
+		cv::imwrite(dnnOut_file_name, syn_img);
+	}
+}
+
 
 std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
 	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"

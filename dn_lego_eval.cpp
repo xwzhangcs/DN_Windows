@@ -1,7 +1,61 @@
 #include "dn_lego_eval.h"
+#include "Utils.h"
+
+void FacadeSeg::eval() {
+	/*std::string chips_path("../data/chips");
+	std::vector<std::string> chipFiles = get_all_files_names_within_folder(chips_path);
+	for (int i = 0; i < chipFiles.size(); i++) {
+		std::string img_file_name = chipFiles[i];
+		std::string chip_img_file = chips_path + "/" + img_file_name;
+		std::string segOut_file_name = "../data/eval_seg/" + img_file_name;
+		std::string dnnOut_file_name = "../data/eval_dnn/" + img_file_name;
+		generateSegOutAndDnnOut(chip_img_file, argv[3], segOut_file_name, dnnOut_file_name, true);
+	}*/
+	std::string path("../data/eval_dataset");
+	std::vector<std::string> facades_folders = get_all_files_names_within_folder(path);
+	std::ofstream out_param("../data/eval_results.txt", std::ios::app);
+	out_param << "facade_id";
+	out_param << ",";
+	out_param << "seg_pix_accuracy";
+	out_param << ",";
+	out_param << "seg_wall_accuracy";
+	out_param << ",";
+	out_param << "seg_wins_accuracy";
+	out_param << ",";
+	out_param << "dnn_pix_accuracy";
+	out_param << ",";
+	out_param << "dnn_wall_accuracy";
+	out_param << ",";
+	out_param << "dnn_wins_accuracy";
+	out_param << "\n";
+	for (int i = 0; i < facades_folders.size(); i++) {
+		std::string facade_labeled_file = path + "/" + facades_folders[i] + "/label.png";
+		std::cout << "labeled_img is " << facade_labeled_file << std::endl;
+		std::string seg_file = "../data/eval_seg/" + facades_folders[i] + ".png";
+		std::string dnn_file = "../data/eval_dnn/" + facades_folders[i] + ".png";
+		std::cout << "seg_img is " << seg_file << std::endl;
+		std::cout << "dnn_img is " << dnn_file << std::endl;
+		std::vector<double> seg_results = eval_segmented_gt(seg_file, facade_labeled_file);
+		std::vector<double> dnn_results = eval_dnn_gt(dnn_file, facade_labeled_file);
+		out_param << facades_folders[i];
+		out_param << ",";
+		out_param << seg_results[0];
+		out_param << ",";
+		out_param << seg_results[1];
+		out_param << ",";
+		out_param << seg_results[2];
+		out_param << ",";
+		out_param << dnn_results[0];
+		out_param << ",";
+		out_param << dnn_results[1];
+		out_param << ",";
+		out_param << dnn_results[2];
+		out_param << "\n";
+	}
+}
 
 std::vector<double> FacadeSeg::eval_segmented_gt(std::string seg_img_file, std::string gt_img_file) {
-	cv::Mat seg_img = cv::imread(seg_img_file);
+	cv::Mat seg_img = cv::imread(seg_img_file, CV_LOAD_IMAGE_ANYCOLOR);
 	cv::Mat gt_img = cv::imread(gt_img_file);
 	int gt_wall_num = 0;
 	int seg_wall_tp = 0;
@@ -12,13 +66,13 @@ std::vector<double> FacadeSeg::eval_segmented_gt(std::string seg_img_file, std::
 			// wall
 			if (gt_img.at<cv::Vec3b>(i, j)[0] == 0 && gt_img.at<cv::Vec3b>(i, j)[1] == 0 && gt_img.at<cv::Vec3b>(i, j)[2] == 255) {
 				gt_wall_num++;
-				if (seg_img.at<cv::Vec3b>(i, j)[0] == 255 && seg_img.at<cv::Vec3b>(i, j)[1] == 255 && seg_img.at<cv::Vec3b>(i, j)[2] == 255) {
+				if ((int)seg_img.at<uchar>(i, j) == 255) {
 					seg_wall_tp++;
 				}
 			}
 			else {// non-wall
 				gt_non_wall_num++;
-				if (seg_img.at<cv::Vec3b>(i, j)[0] == 0 && seg_img.at<cv::Vec3b>(i, j)[1] == 0 && seg_img.at<cv::Vec3b>(i, j)[2] == 0) {
+				if ((int)seg_img.at<uchar>(i, j) == 0 ) {
 					seg_non_wall_tp++;
 				}
 			}
@@ -38,6 +92,39 @@ std::vector<double> FacadeSeg::eval_segmented_gt(std::string seg_img_file, std::
 	std::cout << "non-wall accuracy is " << eval_metrix[2] << std::endl;*/
 	return eval_metrix;
 }
+
+std::vector<double> FacadeSeg::eval_dnn_gt(std::string dnn_img_file, std::string gt_img_file) {
+	cv::Mat dnn_img = cv::imread(dnn_img_file);
+	cv::Mat gt_img = cv::imread(gt_img_file);
+	int gt_wall_num = 0;
+	int seg_wall_tp = 0;
+	int gt_non_wall_num = 0;
+	int seg_non_wall_tp = 0;
+	for (int i = 0; i < gt_img.size().height; i++) {
+		for (int j = 0; j < gt_img.size().width; j++) {
+			// wall
+			if (gt_img.at<cv::Vec3b>(i, j)[0] == 0 && gt_img.at<cv::Vec3b>(i, j)[1] == 0 && gt_img.at<cv::Vec3b>(i, j)[2] == 255) {
+				gt_wall_num++;
+				if (dnn_img.at<cv::Vec3b>(i, j)[0] == 255 && dnn_img.at<cv::Vec3b>(i, j)[1] == 255 && dnn_img.at<cv::Vec3b>(i, j)[2] == 255) {
+					seg_wall_tp++;
+				}
+			}
+			else {// non-wall
+				gt_non_wall_num++;
+				if (dnn_img.at<cv::Vec3b>(i, j)[0] == 0 && dnn_img.at<cv::Vec3b>(i, j)[1] == 0 && dnn_img.at<cv::Vec3b>(i, j)[2] == 0) {
+					seg_non_wall_tp++;
+				}
+			}
+		}
+	}
+	// return pixel accuracy and class accuracy
+	std::vector<double> eval_metrix;
+	eval_metrix.push_back(1.0 * (seg_wall_tp + seg_non_wall_tp) / (gt_wall_num + gt_non_wall_num)); // pixel accuracy
+	eval_metrix.push_back(1.0 * seg_wall_tp / gt_wall_num); // wall accuracy
+	eval_metrix.push_back(1.0 * seg_non_wall_tp / gt_non_wall_num); // non-wall accuracy
+	return eval_metrix;
+}
+
 
 void FacadeSeg::eval_dataset_postprocessing(std::string label_img) {
 	cv::Mat src_img = cv::imread(label_img);

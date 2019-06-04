@@ -42,3 +42,6 @@ void synthesis(std::vector<double> predictions, cv::Size src_size, std::string d
 cv::Scalar readColor(std::string metajson, std::string color_name);
 bool readGround(std::string metajson);
 double readScore(std::string metajson);
+// For evaluating
+void generateSegOutAndDnnOut(std::string chip_img_file, std::string modeljson, std::string segOut_file_name, std::string dnnOut_file_name, bool bDebug);
+
