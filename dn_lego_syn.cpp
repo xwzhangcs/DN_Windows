@@ -10,21 +10,6 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	FacadeSeg eval;
-	eval.eval();
-	return 0;
-	{
-		cv::Mat src_chip = cv::imread("../data/0001_0022.png");
-		{
-			cv::Mat hsv_src;
-			cvtColor(src_chip, hsv_src, cv::COLOR_BGR2HSV);
-			std::vector<cv::Mat> bgr;   //destination array
-			cv::split(hsv_src, bgr);//split source 
-			cv::equalizeHist(bgr[2], bgr[2]);
-			cv::imwrite("../data/output.png",bgr[2]);
-		}
-	}
-	return 0;
 	{
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
@@ -180,6 +165,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
 	rapidjson::Document docModel;
 	docModel.ParseStream(isModel);
+	fclose(fp);
 
 	std::vector<double> tmp_array = util::read1DArray(docModel, "targetChipSize");
 	if (tmp_array.size() != 2) {
@@ -190,7 +176,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	double target_height = tmp_array[1];
 
 	cv::Mat src_chip;
-	src_chip = cv::imread(img_name);
+	src_chip = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	std::vector<cv::Mat> cropped_chips = crop_chip(src_chip, modeljson, type, bground, facChip_size, target_width, target_height, bMultipleChips);
 	croppedImage = cropped_chips[0];// use the best chip to pass through those testings
 	// get confidence value
@@ -240,7 +226,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	}
 	else
 		doc.AddMember("grammar", -1, alloc);
-	// check wheter there are two chips in the vector
+	// check whetether there are two chips in the vector
 	if (cropped_chips.size() == 2 && grammar_type % 2 != 0) {
 		std::vector<double> door_paras = compute_door_paras(cropped_chips[1], modeljson, true);
 		if (door_paras.size() == 8) {
@@ -387,11 +373,15 @@ void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug) 
 		doc.AddMember("valid", false, alloc);
 	// compute avg color
 	cv::Scalar avg_color(0, 0, 0);
-	cv::Mat src = cv::imread(img_name, 1);
+	cv::Mat src = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	for (int i = 0; i < src.size().height; i++) {
 		for (int j = 0; j < src.size().width; j++) {
-			for (int c = 0; c < 3; c++)
-				avg_color.val[c] += src.at<cv::Vec3b>(i, j)[c];
+			for (int c = 0; c < 3; c++) {
+				if (src.channels() == 4)
+					avg_color.val[c] += src.at<cv::Vec4b>(i, j)[c];
+				if (src.channels() == 3)
+					avg_color.val[c] += src.at<cv::Vec3b>(i, j)[c];
+			}
 		}
 	}
 	rapidjson::Value avg_color_json(rapidjson::kArrayType);
@@ -416,7 +406,7 @@ void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug) 
 	if (bDebug) {
 		// do histeq for facades
 		cv::Mat src_chip;
-		src_chip = cv::imread(img_name);
+		src_chip = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		cv::Mat src_chip_histeq;
 		{
 			cv::Mat hsv_src;
@@ -601,21 +591,41 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, 
 		for (int i = 0; i < dst_classify.size().height; i++) {
 			for (int j = 0; j < dst_classify.size().width; j++) {
 				if ((int)dst_classify.at<uchar>(i, j) == 0) {
-					win_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-					win_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-					win_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
-					win_histeq_color.val[0] += src_histeq.at<cv::Vec3b>(i, j)[0];
-					win_histeq_color.val[1] += src_histeq.at<cv::Vec3b>(i, j)[1];
-					win_histeq_color.val[2] += src_histeq.at<cv::Vec3b>(i, j)[2];
+					if (src.channels() == 4) {
+						win_avg_color.val[0] += src.at<cv::Vec4b>(i, j)[0];
+						win_avg_color.val[1] += src.at<cv::Vec4b>(i, j)[1];
+						win_avg_color.val[2] += src.at<cv::Vec4b>(i, j)[2];
+						win_histeq_color.val[0] += src_histeq.at<cv::Vec4b>(i, j)[0];
+						win_histeq_color.val[1] += src_histeq.at<cv::Vec4b>(i, j)[1];
+						win_histeq_color.val[2] += src_histeq.at<cv::Vec4b>(i, j)[2];
+					}
+					if (src.channels() == 3) {
+						win_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
+						win_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
+						win_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+						win_histeq_color.val[0] += src_histeq.at<cv::Vec3b>(i, j)[0];
+						win_histeq_color.val[1] += src_histeq.at<cv::Vec3b>(i, j)[1];
+						win_histeq_color.val[2] += src_histeq.at<cv::Vec3b>(i, j)[2];
+					}
 					win_count++;
 				}
 				else {
-					bg_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
-					bg_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
-					bg_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
-					bg_histeq_color.val[0] += src_histeq.at<cv::Vec3b>(i, j)[0];
-					bg_histeq_color.val[1] += src_histeq.at<cv::Vec3b>(i, j)[1];
-					bg_histeq_color.val[2] += src_histeq.at<cv::Vec3b>(i, j)[2];
+					if (src.channels() == 4) {
+						bg_avg_color.val[0] += src.at<cv::Vec4b>(i, j)[0];
+						bg_avg_color.val[1] += src.at<cv::Vec4b>(i, j)[1];
+						bg_avg_color.val[2] += src.at<cv::Vec4b>(i, j)[2];
+						bg_histeq_color.val[0] += src_histeq.at<cv::Vec4b>(i, j)[0];
+						bg_histeq_color.val[1] += src_histeq.at<cv::Vec4b>(i, j)[1];
+						bg_histeq_color.val[2] += src_histeq.at<cv::Vec4b>(i, j)[2];
+					}
+					if (src.channels() == 3) {
+						bg_avg_color.val[0] += src.at<cv::Vec3b>(i, j)[0];
+						bg_avg_color.val[1] += src.at<cv::Vec3b>(i, j)[1];
+						bg_avg_color.val[2] += src.at<cv::Vec3b>(i, j)[2];
+						bg_histeq_color.val[0] += src_histeq.at<cv::Vec3b>(i, j)[0];
+						bg_histeq_color.val[1] += src_histeq.at<cv::Vec3b>(i, j)[1];
+						bg_histeq_color.val[2] += src_histeq.at<cv::Vec3b>(i, j)[2];
+					}
 					bg_count++;
 				}
 			}
@@ -1084,7 +1094,7 @@ void generateSegOutAndDnnOut(std::string chip_img_file, std::string modeljson, s
 	height = tmp_array[1];
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
-	src = cv::imread(chip_img_file);
+	src = cv::imread(chip_img_file, CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat hsv;
 	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
 	std::vector<cv::Mat> bgr;   //destination array
@@ -1720,7 +1730,7 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 			}
 			// always add best chip
 			cropped_chips.push_back(best_cropped);
-			if(bground && best_id != confidences.size() - 1) {//if best chip == door chip, ignore
+			if(bground) {//if best chip == door chip, ignore
 				// check the grammar of the last chip
 				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * (1 - target_ratio_height), src_chip.size().width  * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat tmp_adjust = adjust_chip(tmp);
@@ -1843,7 +1853,7 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				std::cout << "best chip id is " << best_id << std::endl;
 				cv::imwrite("../data/confidences/best_chip.png", best_cropped);
 			}
-			if (bground && best_id != confidences.size() - 1) {
+			if (bground) {
 				double padding_height_ratio = (1 - target_ratio_height);
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat tmp_adjust = adjust_chip(tmp);
@@ -1949,7 +1959,7 @@ cv::Mat adjust_chip(cv::Mat chip) {
 bool checkFacade(std::string facade_name) {
 	// load image
 	cv::Mat src, dst_ehist, dst_classify;
-	src = cv::imread(facade_name);
+	src = cv::imread(facade_name, CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat hsv;
 	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
 	std::vector<cv::Mat> bgr;   //destination array
@@ -1977,7 +1987,7 @@ bool checkFacade(std::string facade_name) {
 		return true;
 }
 
-cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
+cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters) {
 	// Here we declare that our samples will be 2 dimensional column vectors.  
 	// (Note that if you don't know the dimensionality of your vectors at compile time
 	// you can change the 2 to a 0 and then set the size at runtime)
@@ -2010,7 +2020,12 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
 
 	for (int i = 0; i < src_img.size().height; i++) {
 		for (int j = 0; j < src_img.size().width; j++) {
-			if (src_img.channels() == 3) {
+			if (src_img.channels() == 4) {
+				m(0) = src_img.at<cv::Vec4b>(i, j)[0] * 1.0 / 255;
+				m(1) = src_img.at<cv::Vec4b>(i, j)[1] * 1.0 / 255;
+				m(2) = src_img.at<cv::Vec4b>(i, j)[2] * 1.0 / 255;
+			}
+			else if (src_img.channels() == 3) {
 				m(0) = src_img.at<cv::Vec3b>(i, j)[0] * 1.0 / 255;
 				m(1) = src_img.at<cv::Vec3b>(i, j)[1] * 1.0 / 255;
 				m(2) = src_img.at<cv::Vec3b>(i, j)[2] * 1.0 / 255;
@@ -2045,6 +2060,23 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
 	}
 	int count = 0;
 	// 
+	if (src_img.channels() == 4) {
+		count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += src_img.at<cv::Vec4b>(i, j)[0];
+				clusters_colors[test(samples[count])][1] += src_img.at<cv::Vec4b>(i, j)[1];
+				clusters_colors[test(samples[count])][2] += src_img.at<cv::Vec4b>(i, j)[2];
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+			clusters_colors[i][1] = clusters_colors[i][1] / clusters_points[i];
+			clusters_colors[i][2] = clusters_colors[i][2] / clusters_points[i];
+		}
+	}
 	if (src_img.channels() == 3) {
 		count = 0;
 		for (int i = 0; i < src_img.size().height; i++) {
@@ -2083,7 +2115,7 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
 	cv::Scalar darkest_color(255, 255, 255);
 	for (int i = 0; i < clusters; i++) {
 		//std::cout << "clusters_colors " << i << " is " << clusters_colors[i] << std::endl;
-		if (src_img.channels() == 3) {
+		if (src_img.channels() == 3 || src_img.channels() == 4) {
 			if (clusters_colors[i][0] < darkest_color[0] && clusters_colors[i][1] < darkest_color[1] && clusters_colors[i][2] < darkest_color[2]) {
 				darkest_color[0] = clusters_colors[i][0];
 				darkest_color[1] = clusters_colors[i][1];
@@ -2115,7 +2147,7 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
 			}
 		}
 	}
-	else {
+	else if (src_img.channels() == 3) {
 		for (int i = 0; i < out_img.size().height; i++) {
 			for (int j = 0; j < out_img.size().width; j++) {
 				if (test(samples[count]) == darkest_cluster) {
@@ -2127,6 +2159,24 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img,  int clusters) {
 					out_img.at<cv::Vec3b>(i, j)[0] = 255;
 					out_img.at<cv::Vec3b>(i, j)[1] = 255;
 					out_img.at<cv::Vec3b>(i, j)[2] = 255;
+
+				}
+				count++;
+			}
+		}
+	}
+	else {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<cv::Vec4b>(i, j)[0] = 0;
+					out_img.at<cv::Vec4b>(i, j)[1] = 0;
+					out_img.at<cv::Vec4b>(i, j)[2] = 0;
+				}
+				else {
+					out_img.at<cv::Vec4b>(i, j)[0] = 255;
+					out_img.at<cv::Vec4b>(i, j)[1] = 255;
+					out_img.at<cv::Vec4b>(i, j)[2] = 255;
 
 				}
 				count++;
