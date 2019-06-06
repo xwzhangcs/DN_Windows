@@ -6,7 +6,11 @@
 				"cgv_r": {
 					"clusterDir": "2018-09-12/D4/BuildingClusters",
 					"selected": [
-						{ "id":  6, "sat": "15JAN21161308" }
+						{ "id":  3, "sat": "15JAN21161308" },
+						{ "id":  4, "sat": "15FEB08160130" },
+						{ "id":  5, "sat": "15JAN21161308" },
+						{ "id":  7, "sat": "15JAN21161308" },
+						{ "id":  8, "sat": "15JAN21161308" }
 					]
 				},
 				"hist": {

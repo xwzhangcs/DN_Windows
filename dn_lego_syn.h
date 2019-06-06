@@ -15,7 +15,7 @@ int const cluster_number = 2;
 
 /**** helper functions *****/
 std::vector<int> clustersList(std::string metajson, int regionId, std::string modelType);
-std::vector<string> get_all_files_names_within_folder(std::string folder);
+std::vector<std::string> get_all_files_names_within_folder(std::string folder);
 cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters);
 
 /**** steps *****/
@@ -23,7 +23,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height, bool bMultipleChips);
 cv::Mat adjust_chip(cv::Mat chip);
 bool checkFacade(std::string facade_name);
-void saveInvalidFacade(std::string metajson, std::string img_filename, bool bDebug);
+void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug, std::string img_filename);
 
 bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename);
 cv::Mat cleanAlignedImage(cv::Mat src, float threshold);

@@ -10,7 +10,7 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	{
+	/*{
 		std::string path("../data/test");
 		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
 		for (int i = 0; i < imageFiles.size(); i++) {
@@ -18,7 +18,7 @@ int main(int argc, const char* argv[]) {
 			std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
 			int found = tmp.find("_");
 			std::string facade_id = tmp.substr(found + 1, 4);
-			std::string metajson = "output/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
+			std::string metajson = "../data/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
 			std::string img_filename = cluster_id + "_" + facade_id + ".png";
 			std::cout << metajson << ", "<< img_filename << std::endl;
 			cv::Mat croppedImage;
@@ -37,9 +37,9 @@ int main(int argc, const char* argv[]) {
 			}
 		}
 	}
-	return 0;
+	return 0;*/
 	std::string path(argv[1]);
-	std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
+	/*std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
 	std::vector<std::string> clusters;
 	clusters.resize(clustersID.size());
 	for (int i = 0; i < clustersID.size(); i++) {
@@ -47,34 +47,35 @@ int main(int argc, const char* argv[]) {
 			clusters[i] = "000" + std::to_string(clustersID[i]);
 		else if(clustersID[i] < 100)
 			clusters[i] = "00" + std::to_string(clustersID[i]);
-	}
+	}*/
+	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-			std::string img_filename = metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
 			cv::Mat croppedImage;
 			bool bvalid = chipping(metajson, argv[3], croppedImage, true, true, img_filename);
 			if (bvalid) {
 				// generate score value
-				{
-					double score = readScore(metajson);
-					std::ofstream out_param("../score.txt", std::ios::app);
-					out_param << img_filename;
-					out_param << ",";
-					out_param << score;
-					out_param << "\n";
-				}
-				// generate confidence value
-				{
-					double confidence = compute_confidence(croppedImage, argv[3], false)[0];
-					std::ofstream out_param("../confidence.txt", std::ios::app);
-					out_param << img_filename;
-					out_param << ",";
-					out_param << confidence;
-					out_param << "\n";
-				}
+				//{
+				//	double score = readScore(metajson);
+				//	std::ofstream out_param("../score.txt", std::ios::app);
+				//	out_param << img_filename;
+				//	out_param << ",";
+				//	out_param << score;
+				//	out_param << "\n";
+				//}
+				//// generate confidence value
+				//{
+				//	double confidence = compute_confidence(croppedImage, argv[3], false)[0];
+				//	std::ofstream out_param("../confidence.txt", std::ios::app);
+				//	out_param << img_filename;
+				//	out_param << ",";
+				//	out_param << confidence;
+				//	out_param << "\n";
+				//}
 				cv::Mat dnn_img;
 				segment_chip(croppedImage, dnn_img, metajson, argv[3], true, img_filename);
 				std::vector<double> predictions = feedDnn(dnn_img, metajson, argv[3], true, img_filename);
@@ -156,7 +157,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 		bvalid = checkFacade(img_name);
 	}
 	if (!bvalid) {
-		saveInvalidFacade(metajson, img_name, false);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	// read model config json file
@@ -191,23 +192,23 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	}
 	int grammar_type = (int)info_facade[1];
 	if ((info_facade[0] < 0.92 && score < 0.94) || score > 0.994) {
-		saveInvalidFacade(metajson, img_name, true);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	else if (info_facade[3] > 0.30) {
-		saveInvalidFacade(metajson, img_name, true);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	else if (grammar_type == 1 && info_facade[2] < 9) {
-		saveInvalidFacade(metajson, img_name, true);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	else if (grammar_type == 2 && info_facade[2] < 11) {
-		saveInvalidFacade(metajson, img_name, true);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	else if(info_facade[2] <= 3){
-		saveInvalidFacade(metajson, img_name, true);
+		saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	else {
@@ -356,7 +357,7 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	return true;
 }
 
-void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug) {
+void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug, std::string img_filename) {
 	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
 	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
@@ -417,10 +418,8 @@ void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug) 
 			cv::merge(bgr, src_chip_histeq);
 			cvtColor(src_chip_histeq, src_chip_histeq, cv::COLOR_HSV2BGR);
 		}
-		std::size_t found = img_name.find("chip/");
-		found = found + 5;
-		cv::imwrite("../invalid_facades/" + img_name.substr(found), src_chip);
-		cv::imwrite("../invalid_facadesHisteq/" + img_name.substr(found), src_chip_histeq);
+		cv::imwrite("../invalid_facades/" + img_filename, src_chip);
+		cv::imwrite("../invalid_facadesHisteq/" + img_filename, src_chip_histeq);
 	}
 }
 
@@ -1652,6 +1651,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				// get the cropped img
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * start_width_ratio, 0, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat croppedImage = adjust_chip(tmp);
+				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
+					croppedImage = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
 				confidences.push_back(conf_value);
@@ -1702,6 +1704,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				// get the cropped img
 				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * start_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat croppedImage = adjust_chip(tmp);
+				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
+					croppedImage = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
 				{// save chips
@@ -1734,6 +1739,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				// check the grammar of the last chip
 				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * (1 - target_ratio_height), src_chip.size().width  * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat tmp_adjust = adjust_chip(tmp);
+				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
+					tmp_adjust = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
 				if (grammar_type % 2 == 0) {// doors
@@ -1782,6 +1790,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				// get the cropped img
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * start_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat croppedImage = adjust_chip(tmp);
+				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
+					croppedImage = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
 				confidences.push_back(conf_value);
@@ -1807,6 +1818,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				padding_height_ratio = (1 - target_ratio_height);
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat tmp_adjust = adjust_chip(tmp);
+				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
+					tmp_adjust = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
 				if (grammar_type % 2 == 0) {// doors
@@ -1826,6 +1840,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				// get the cropped img
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * start_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat croppedImage = adjust_chip(tmp);
+				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
+					croppedImage = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
 				confidences.push_back(conf_value);
@@ -1857,6 +1874,9 @@ std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type
 				double padding_height_ratio = (1 - target_ratio_height);
 				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
 				cv::Mat tmp_adjust = adjust_chip(tmp);
+				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
+					tmp_adjust = tmp; // don't adjust
+				}
 				// get confidence value for the cropped img
 				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
 				if (grammar_type % 2 == 0) {// doors
