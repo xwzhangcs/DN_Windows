@@ -157,7 +157,8 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 		bvalid = checkFacade(img_name);
 	}
 	if (!bvalid) {
-		saveInvalidFacade(metajson, img_name, true, img_filename);
+		if(!broof)
+			saveInvalidFacade(metajson, img_name, true, img_filename);
 		return false;
 	}
 	// read model config json file
