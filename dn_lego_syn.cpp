@@ -10,109 +10,10 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	/*{
-		std::string path("../data/test");
-		std::vector<std::string> imageFiles = get_all_files_names_within_folder(path);
-		for (int i = 0; i < imageFiles.size(); i++) {
-			std::string cluster_id = imageFiles[i].substr(0, imageFiles[i].find("_"));
-			std::string tmp = imageFiles[i].substr(imageFiles[i].find("_") + 1);
-			int found = tmp.find("_");
-			std::string facade_id = tmp.substr(found + 1, 4);
-			std::string metajson = "../data/D4/cgv_r/" + cluster_id + "/metadata/" + cluster_id + "_" + facade_id + ".json";
-			std::string img_filename = cluster_id + "_" + facade_id + ".png";
-			std::cout << metajson << ", "<< img_filename << std::endl;
-			cv::Mat croppedImage;
-			bool bvalid = chipping(metajson, argv[3], croppedImage, true, true, img_filename);
-			if (bvalid) {
-				cv::Mat dnn_img;
-				segment_chip(croppedImage, dnn_img, metajson, argv[3], true, img_filename);
-				std::vector<double> predictions = feedDnn(dnn_img, metajson, argv[3], true, img_filename);
-				std::cout << "predictions size is " << predictions.size() << std::endl;
-				cv::Scalar win_avg_color = readColor(metajson, "window_color");
-				cv::Scalar bg_avg_color = readColor(metajson, "bg_color");
-				cv::Scalar win_histeq_color = readColor(metajson, "window_histeq_color");
-				cv::Scalar bg_histeq_color = readColor(metajson, "bg_histeq_color");
-				synthesis(predictions, croppedImage.size(), "../dnnsOut", win_avg_color, bg_avg_color, win_histeq_color, bg_histeq_color, img_filename, true);
-
-			}
-		}
-	}
-	return 0;*/
-	std::string path(argv[1]);
-	/*std::vector<int> clustersID = clustersList(argv[2], 4, "cgv_r");
-	std::vector<std::string> clusters;
-	clusters.resize(clustersID.size());
-	for (int i = 0; i < clustersID.size(); i++) {
-		if (clustersID[i] < 10)
-			clusters[i] = "000" + std::to_string(clustersID[i]);
-		else if(clustersID[i] < 100)
-			clusters[i] = "00" + std::to_string(clustersID[i]);
-	}*/
-	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
-	for (int i = 0; i < clusters.size(); i++) {
-		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
-		for (int j = 0; j < metaFiles.size(); j++) {
-			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-			std::cout << metajson << ", " << img_filename << std::endl;
-			cv::Mat croppedImage;
-			bool bvalid = chipping(metajson, argv[3], croppedImage, true, true, img_filename);
-			if (bvalid) {
-				// generate score value
-				//{
-				//	double score = readScore(metajson);
-				//	std::ofstream out_param("../score.txt", std::ios::app);
-				//	out_param << img_filename;
-				//	out_param << ",";
-				//	out_param << score;
-				//	out_param << "\n";
-				//}
-				//// generate confidence value
-				//{
-				//	double confidence = compute_confidence(croppedImage, argv[3], false)[0];
-				//	std::ofstream out_param("../confidence.txt", std::ios::app);
-				//	out_param << img_filename;
-				//	out_param << ",";
-				//	out_param << confidence;
-				//	out_param << "\n";
-				//}
-				cv::Mat dnn_img;
-				segment_chip(croppedImage, dnn_img, metajson, argv[3], true, img_filename);
-				std::vector<double> predictions = feedDnn(dnn_img, metajson, argv[3], true, img_filename);
-				cv::Scalar win_avg_color = readColor(metajson, "window_color");
-				cv::Scalar bg_avg_color = readColor(metajson, "bg_color");
-				cv::Scalar win_histeq_color = readColor(metajson, "window_histeq_color");
-				cv::Scalar bg_histeq_color = readColor(metajson, "bg_histeq_color");
-				synthesis(predictions, croppedImage.size(), "../dnnsOut", win_avg_color, bg_avg_color, win_histeq_color, bg_histeq_color, img_filename, true);
-			}
-		}
-	}
 	return 0;
 }
 
-std::vector<int> clustersList(std::string metajson, int regionId, std::string modelType) {
-	// read image json file
-	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
-	char readBuffer[10240];
-	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
-	rapidjson::Document doc;
-	doc.ParseStream(is);
-	rapidjson::Value& regions = doc["regions"];
-	std::string region = "D" + std::to_string(regionId);
-	rapidjson::Value& regionContent = regions[region.c_str()];
-	rapidjson::Value& regionModels = regionContent["models"];
-	rapidjson::Value& regionModel = regionModels[modelType.c_str()];
-	rapidjson::Value& clustersSelected = regionModel["selected"];
-	std::vector<int> clustersList;
-	clustersList.resize(clustersSelected.Size());
-	for (int i = 0; i < clustersSelected.Size(); i++) {
-		clustersList[i] = clustersSelected[i]["id"].GetInt();
-		//std::cout << clustersList[i] << std::endl;
-	}
-	return clustersList;
-}
-
-bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename) {
+void readMetajson(std::string metajson, FacadeInfo& fi) {
 	// read image json file
 	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
@@ -120,66 +21,127 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 	rapidjson::Document doc;
 	doc.ParseStream(is);
 	// size of chip
-	std::vector<double> facChip_size = util::read1DArray(doc, "size");
+	fi.facadeSize = util::read1DArray(doc, "size");
 	// roof 
-	bool broof = util::readBoolValue(doc, "roof", false);
+	fi.roof = util::readBoolValue(doc, "roof", false);
 	// ground
-	bool bground = util::readBoolValue(doc, "ground", false);
+	fi.ground = util::readBoolValue(doc, "ground", false);
 	// image file
-	std::string img_name = util::readStringValue(doc, "imagename");
+	fi.imgName = util::readStringValue(doc, "imagename");
 	// score
-	double score = util::readNumber(doc, "score", 0.2);
+	fi.score = util::readNumber(doc, "score", 0.2);
 	fclose(fp);
-	// first decide whether it's a valid chip
-	bool bvalid = false;
-	int type = 0;
-	if (!broof && facChip_size[0] < 30.0 && facChip_size[0] > 15.0 && facChip_size[1] < 30.0 && facChip_size[1] > 15.0 && score > 0.94) {
-		type = 1;
-		bvalid = true;
-	}
-	else if (!broof && facChip_size[0] > 30.0 && facChip_size[1] < 30.0 && facChip_size[1] > 12.0 && score > 0.65) {
-		type = 2;
-		bvalid = true;
-	}
-	else if (!broof && facChip_size[0] < 30.0 && facChip_size[0] > 12.0 && facChip_size[1] > 30.0 && score > 0.65) {
-		type = 3;
-		bvalid = true;
-	}
-	else if (!broof && facChip_size[0] > 30.0 && facChip_size[1] > 30.0 && score > 0.68) {
-		type = 4;
-		bvalid = true;
-	}
-	else {
-		// do nothing
-	}
-	// one more check
-	if (bvalid) {
-		bvalid = checkFacade(img_name);
-	}
-	if (!bvalid) {
-		if(!broof)
-			saveInvalidFacade(metajson, img_name, true, img_filename);
-		return false;
-	}
+}
+
+void readModeljson(std::string modeljson, ModelInfo& mi) {
 	// read model config json file
-	fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
 	memset(readBuffer, 0, sizeof(readBuffer));
 	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
 	rapidjson::Document docModel;
 	docModel.ParseStream(isModel);
 	fclose(fp);
+	mi.targetChipSize = util::read1DArray(docModel, "targetChipSize");
+	mi.defaultSize = util::read1DArray(docModel, "defaultSize");
+	mi.debug = util::readBoolValue(docModel, "debug", false);
+	rapidjson::Value& grammars = docModel["grammars"];
+	// classifier
+	rapidjson::Value& grammar_classifier = grammars["classifier"];
+	// path of DN model
+	mi.classifier_path = util::readStringValue(grammar_classifier, "model");
+	mi.number_grammars = util::readNumber(grammar_classifier, "number_paras", 6);
+	// get facade folder path
+	mi.facadesFolder = util::readStringValue(docModel, "facadesFolder");
+	mi.chipsFolder = util::readStringValue(docModel, "chipsFolder");
+	mi.segsFolder = util::readStringValue(docModel, "segsFolder");
+	mi.dnnsInFolder = util::readStringValue(docModel, "dnnsInFolder");
+	mi.dnnsOutFolder = util::readStringValue(docModel, "dnnsOutFolder");
+	// get grammars
+	for (int i = 0; i < mi.number_grammars; i++) {
+		std::string grammar_name = "grammar" + std::to_string(i + 1);
+		rapidjson::Value& grammar = grammars[grammar_name.c_str()];
+		// path of DN model
+		mi.grammars[i].grammar_id = i + 1;
+		mi.grammars[i].model_path = util::readStringValue(grammar, "model");
+		// number of paras
+		mi.grammars[i].number_paras = util::readNumber(grammar, "number_paras", 5);
+		// range of Rows
+		mi.grammars[i].rangeOfRows = util::read1DArray(grammar, "rangeOfRows");
+		// range of Cols
+		mi.grammars[i].rangeOfCols = util::read1DArray(grammar, "rangeOfCols");
+		// range of Grouping
+		mi.grammars[i].rangeOfGrouping = util::read1DArray(grammar, "rangeOfGrouping");
+		// range of relativeW
+		mi.grammars[i].relativeWidth = util::read1DArray(grammar, "relativeWidth");
+		// range of relativeH
+		mi.grammars[i].relativeHeight = util::read1DArray(grammar, "relativeHeight");
+		if (mi.grammars[i].number_paras == 8) {
+			// range of Doors
+			mi.grammars[i].rangeOfDoors = util::read1DArray(grammar, "rangeOfDoors");
+			// relativeDWidth
+			mi.grammars[i].relativeDWidth = util::read1DArray(grammar, "relativeDWidth");
+			// relativeDHeight
+			mi.grammars[i].relativeDHeight = util::read1DArray(grammar, "relativeDHeight");
+		}
+	}
+}
 
-	std::vector<double> tmp_array = util::read1DArray(docModel, "targetChipSize");
-	if (tmp_array.size() != 2) {
+int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score) {
+	int type = 0;
+	if (facadeSize[0] < targetSize[0]  && facadeSize[0] > 0.5 * targetSize[0] && facadeSize[1] < targetSize[1] && facadeSize[1] > 0.5 * targetSize[1] && score > 0.94) {
+		type = 1;
+	}
+	else if (facadeSize[0] > targetSize[0] && facadeSize[1] < targetSize[1] && facadeSize[1] > 0.5 * targetSize[1] && score > 0.65) {
+		type = 2;
+	}
+	else if (facadeSize[0] < targetSize[0] && facadeSize[0] > 0.5 * targetSize[0] && facadeSize[1] > targetSize[1] && score > 0.65) {
+		type = 3;
+	}
+	else if (facadeSize[0] > targetSize[0] && facadeSize[1] > targetSize[1] && score > 0.68) {
+		type = 4;
+	}
+	else {
+		// do nothing
+	}
+	return type;
+}
+
+bool chipping(FacadeInfo& fi, std::string modeljson, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename) {
+	// size of chip
+	std::vector<double> facadeSize = fi.facadeSize;
+	// roof 
+	bool broof = fi.roof;
+	// ground
+	bool bground = fi.ground;
+	// image file
+	std::string img_name = fi.imgName;
+	// score
+	double score = fi.score;
+	// first decide whether it's a valid chip
+	bool bvalid = false;
+	// read model config json file
+	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
+	char readBuffer[10240];
+	memset(readBuffer, 0, sizeof(readBuffer));
+	rapidjson::FileReadStream isModel(fp, readBuffer, sizeof(readBuffer));
+	rapidjson::Document docModel;
+	docModel.ParseStream(isModel);
+	fclose(fp);
+	std::vector<double> targetSize = util::read1DArray(docModel, "targetChipSize");
+	if (targetSize.size() != 2) {
 		std::cout << "Please check the targetChipSize member in the JSON file" << std::endl;
 		return false;
 	}
-	double target_width = tmp_array[0];
-	double target_height = tmp_array[1];
-
+	int type = reject(img_name, facadeSize, targetSize, score);
+	if (type == 0) {
+		bvalid = false;
+		return false;
+	}
+	/*
 	cv::Mat src_chip;
 	src_chip = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-	std::vector<cv::Mat> cropped_chips = crop_chip(src_chip, modeljson, type, bground, facChip_size, target_width, target_height, bMultipleChips);
+	std::vector<cv::Mat> cropped_chips = crop_chip(src_chip, modeljson, type, bground, facadeSize, targetSize, bMultipleChips);
 	croppedImage = cropped_chips[0];// use the best chip to pass through those testings
 	// get confidence value
 	// get the number of contours
@@ -355,73 +317,28 @@ bool chipping(std::string metajson, std::string modeljson, cv::Mat& croppedImage
 		cv::imwrite(facadesHisteq_folder + "/" + img_filename, src_chip_histeq);
 		cv::imwrite(chipsHisteq_folder + "/" + img_filename, chip_histeq);
 	}
+	*/
 	return true;
 }
 
-void saveInvalidFacade(std::string metajson, std::string img_name, bool bDebug, std::string img_filename) {
-	FILE* fp = fopen(metajson.c_str(), "rb"); // non-Windows use "r"
-	char readBuffer[10240];
-	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
-	rapidjson::Document doc;
-	doc.ParseStream(is);
-	fclose(fp);
+std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bground, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
+	std::vector<cv::Mat> cropped_chips;
+	if (type == 1) {
 
-	// write back to json file
-	fp = fopen(metajson.c_str(), "w"); // non-Windows use "w"
-	rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
-	if (doc.HasMember("valid"))
-		doc["valid"].SetBool(false);
-	else
-		doc.AddMember("valid", false, alloc);
-	// compute avg color
-	cv::Scalar avg_color(0, 0, 0);
-	cv::Mat src = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-	for (int i = 0; i < src.size().height; i++) {
-		for (int j = 0; j < src.size().width; j++) {
-			for (int c = 0; c < 3; c++) {
-				if (src.channels() == 4)
-					avg_color.val[c] += src.at<cv::Vec4b>(i, j)[c];
-				if (src.channels() == 3)
-					avg_color.val[c] += src.at<cv::Vec3b>(i, j)[c];
-			}
-		}
 	}
-	rapidjson::Value avg_color_json(rapidjson::kArrayType);
-	for (int i = 0; i < 3; i++) {
-		avg_color.val[i] = avg_color.val[i] / (src.size().height * src.size().width);
-		avg_color_json.PushBack(avg_color.val[i], alloc);
-	}
-	if (doc.HasMember("bg_color")) {
-		doc["bg_color"].Clear();
-		doc["bg_color"].PushBack(avg_color.val[0], alloc);
-		doc["bg_color"].PushBack(avg_color.val[1], alloc);
-		doc["bg_color"].PushBack(avg_color.val[2], alloc);
-	}
-	else
-		doc.AddMember("bg_color", avg_color_json, alloc);
+	else if (type == 2) {
 
-	char writeBuffer[10240];
-	rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
-	rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
-	doc.Accept(writer);
-	fclose(fp);
-	if (bDebug) {
-		// do histeq for facades
-		cv::Mat src_chip;
-		src_chip = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-		cv::Mat src_chip_histeq;
-		{
-			cv::Mat hsv_src;
-			cvtColor(src_chip, hsv_src, cv::COLOR_BGR2HSV);
-			std::vector<cv::Mat> bgr;   //destination array
-			cv::split(hsv_src, bgr);//split source 
-			cv::equalizeHist(bgr[2], bgr[2]);
-			cv::merge(bgr, src_chip_histeq);
-			cvtColor(src_chip_histeq, src_chip_histeq, cv::COLOR_HSV2BGR);
-		}
-		cv::imwrite("../invalid_facades/" + img_filename, src_chip);
-		cv::imwrite("../invalid_facadesHisteq/" + img_filename, src_chip_histeq);
 	}
+	else if (type == 3) {
+
+	}
+	else if (type == 4) {
+
+	}
+	else {
+		// do nothing
+	}
+	return cropped_chips;
 }
 
 bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
@@ -1343,7 +1260,6 @@ void generateSegOutAndDnnOut(std::string chip_img_file, std::string modeljson, s
 	}
 }
 
-
 std::vector<double> feedDnn(cv::Mat dnn_img, std::string metajson, std::string modeljson, bool bDebug, std::string img_filename) {
 	FILE* fp = fopen(modeljson.c_str(), "rb"); // non-Windows use "r"
 	char readBuffer[10240];
@@ -1621,275 +1537,6 @@ void synthesis(std::vector<double> predictions, cv::Size src_size, std::string d
 		cv::imwrite(dnnsOut_folder + "/" + img_filename, syn_img);
 		cv::imwrite("../dnnsHisteq/" + img_filename, syn_histeq_img);
 	}
-}
-
-std::vector<cv::Mat> crop_chip(cv::Mat src_chip, std::string modeljson, int type, bool bground, std::vector<double> facChip_size, double target_width, double target_height, bool bMultipleChips) {
-	std::vector<cv::Mat> cropped_chips;
-	if (type == 1) {
-		cropped_chips.push_back(src_chip.clone());
-	}
-	else if (type == 2) {
-		if (facChip_size[0] < 1.6 * target_width || !bMultipleChips) {
-			double target_ratio_width = target_width / facChip_size[0];
-			double target_ratio_height = target_height / facChip_size[1];
-			if (target_ratio_height > 1.0)
-				target_ratio_height = 1.0;
-			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
-			// crop 30 * 30
-			cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, 0, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cropped_chips.push_back(adjust_chip(tmp));
-		}
-		else {
-			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
-			double start_width_ratio = index * 0.1;
-			double target_ratio_width = target_width / facChip_size[0];
-			double target_ratio_height = target_height / facChip_size[1];
-			if (target_ratio_height > 1.0)
-				target_ratio_height = 1.0;
-			std::vector<double> confidences;
-			while (start_width_ratio + target_ratio_width < 1.0) {
-				// get the cropped img
-				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * start_width_ratio, 0, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat croppedImage = adjust_chip(tmp);
-				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
-					croppedImage = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
-				confidences.push_back(conf_value);
-				index++;
-				start_width_ratio = index * 0.1;
-			}
-			// find the best img
-			double best_conf = 0;
-			int best_id = -1;
-			for (int i = 0; i < confidences.size(); i++) {
-				if (best_conf < confidences[i]) {
-					best_conf = confidences[i];
-					best_id = i;
-				}
-			}
-			// output best img
-			cv::Mat  best_cropped_tmp = src_chip(cv::Rect(src_chip.size().width * best_id * 0.1, 0, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::Mat  best_cropped = adjust_chip(best_cropped_tmp);
-			cropped_chips.push_back(best_cropped);
-		}
-	}
-	else if (type == 3) {
-		if (facChip_size[1] < 1.6 * target_width || !bMultipleChips) {
-			double target_ratio_height = target_height / facChip_size[1];
-			double padding_height_ratio = 0;
-			double target_ratio_width = target_width / facChip_size[0];
-			if (target_ratio_width >= 1.0)
-				target_ratio_width = 1.0;
-			if (!bground) {
-				padding_height_ratio = (1 - target_ratio_height) * 0.5;
-			}
-			else {
-				padding_height_ratio = (1 - target_ratio_height);
-			}
-			cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cropped_chips.push_back(adjust_chip(tmp));
-		}
-		else {
-			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
-			double start_height_ratio = index * 0.1;
-			double target_ratio_height = target_height / facChip_size[1];
-			double target_ratio_width = target_width / facChip_size[0];
-			if (target_ratio_width >= 1.0)
-				target_ratio_width = 1.0;
-			std::vector<double> confidences;
-			while (start_height_ratio + target_ratio_height < 1.0) {
-				// get the cropped img
-				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * start_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat croppedImage = adjust_chip(tmp);
-				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
-					croppedImage = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
-				{// save chips
-					std::cout << "chip id is " << index << ", value is " << conf_value << std::endl;
-					cv::imwrite("../data/confidences/" + std::to_string(index) + ".png", croppedImage);
-				}
-				confidences.push_back(conf_value);
-				index++;
-				start_height_ratio = index * 0.1;
-			}
-			// find the best img
-			double best_conf = 0;
-			int best_id = -1;
-			for (int i = 0; i < confidences.size(); i++) {
-				if (best_conf < confidences[i]) {
-					best_conf = confidences[i];
-					best_id = i;
-				}
-			}
-			// output best img
-			cv::Mat best_cropped_tmp = src_chip(cv::Rect(0, src_chip.size().height * best_id * 0.1, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			{
-				std::cout << "best chip id is " << best_id << std::endl;
-				cv::imwrite("../data/confidences/best_chip.png", best_cropped);
-			}
-			// always add best chip
-			cropped_chips.push_back(best_cropped);
-			if(bground) {//if best chip == door chip, ignore
-				// check the grammar of the last chip
-				cv::Mat tmp = src_chip(cv::Rect(0, src_chip.size().height * (1 - target_ratio_height), src_chip.size().width  * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat tmp_adjust = adjust_chip(tmp);
-				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
-					tmp_adjust = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
-				if (grammar_type % 2 == 0) {// doors
-					cropped_chips.push_back(tmp_adjust);
-				}
-			}
-		}
-	}
-	else if (type == 4) {
-		double longer_dim = 0;
-		double target_dim = 0;
-		bool bLonger_width = false;
-		if (facChip_size[0] > facChip_size[1]) {
-			longer_dim = facChip_size[0];
-			target_dim = target_width;
-			bLonger_width = true;
-		}
-		else {
-			longer_dim = facChip_size[1];
-			target_dim = target_height;
-		}
-		if (longer_dim < 1.6 * target_dim || !bMultipleChips) {
-			// crop 30 * 30
-			double target_ratio_width = target_width / facChip_size[0];
-			double target_ratio_height = target_height / facChip_size[1];
-			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
-			double padding_height_ratio = 0;
-			if (!bground) {
-				padding_height_ratio = (1 - target_ratio_height) * 0.5;
-			}
-			else {
-				padding_height_ratio = (1 - target_ratio_height);
-			}
-			cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cropped_chips.push_back(adjust_chip(tmp));
-		}
-		else if(bLonger_width) {
-			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
-			double start_width_ratio = index * 0.1;
-			double target_ratio_width = target_width / facChip_size[0];
-			double target_ratio_height = target_height / facChip_size[1];
-			double padding_height_ratio = (1 - target_ratio_height) * 0.5;
-			std::vector<double> confidences;
-			while (start_width_ratio + target_ratio_width < 1.0) {
-				// get the cropped img
-				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * start_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat croppedImage = adjust_chip(tmp);
-				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
-					croppedImage = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
-				confidences.push_back(conf_value);
-				index++;
-				start_width_ratio = index * 0.1;
-			}
-			// find the best img
-			double best_conf = 0;
-			int best_id = -1;
-			for (int i = 0; i < confidences.size(); i++) {
-				if (best_conf < confidences[i]) {
-					best_conf = confidences[i];
-					best_id = i;
-				}
-			}
-			// output best img
-			cv::Mat  best_cropped_tmp = src_chip(cv::Rect(src_chip.size().width * best_id * 0.1, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			// always add best chip
-			cropped_chips.push_back(best_cropped);
-			if (bground) {
-				double padding_width_ratio = (1 - target_ratio_width) * 0.5;
-				padding_height_ratio = (1 - target_ratio_height);
-				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat tmp_adjust = adjust_chip(tmp);
-				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
-					tmp_adjust = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
-				if (grammar_type % 2 == 0) {// doors
-					cropped_chips.push_back(tmp_adjust);
-				}
-			}
-		}
-		else {
-			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
-			double start_height_ratio = index * 0.1;
-			double target_ratio_width = target_width / facChip_size[0];
-			double target_ratio_height = target_height / facChip_size[1];
-			double padding_width_ratio = (1 - target_ratio_width) * 0.5;
-			std::vector<double> confidences;
-			while (start_height_ratio + target_ratio_height < 1.0) {
-				// get the cropped img
-				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * start_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat croppedImage = adjust_chip(tmp);
-				if (croppedImage.size().width == 0 || croppedImage.size().height == 0) {
-					croppedImage = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				double conf_value = compute_confidence(croppedImage, modeljson, false)[0];
-				confidences.push_back(conf_value);
-				{// save chips
-					std::cout << "chip id is " << index << ", value is " << conf_value << std::endl;
-					cv::imwrite("../data/confidences/" + std::to_string(index) + ".png", croppedImage);
-				}
-				index++;
-				start_height_ratio = index * 0.1;
-			}
-			// find the best img
-			double best_conf = 0;
-			int best_id = -1;
-			for (int i = 0; i < confidences.size(); i++) {
-				if (best_conf < confidences[i]) {
-					best_conf = confidences[i];
-					best_id = i;
-				}
-			}
-			// output best img
-			cv::Mat  best_cropped_tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * best_id * 0.1, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-			cv::Mat best_cropped = adjust_chip(best_cropped_tmp);
-			cropped_chips.push_back(best_cropped);
-			{
-				std::cout << "best chip id is " << best_id << std::endl;
-				cv::imwrite("../data/confidences/best_chip.png", best_cropped);
-			}
-			if (bground) {
-				double padding_height_ratio = (1 - target_ratio_height);
-				cv::Mat tmp = src_chip(cv::Rect(src_chip.size().width * padding_width_ratio, src_chip.size().height * padding_height_ratio, src_chip.size().width * target_ratio_width, src_chip.size().height * target_ratio_height));
-				cv::Mat tmp_adjust = adjust_chip(tmp);
-				if (tmp_adjust.size().width == 0 || tmp_adjust.size().height == 0) {
-					tmp_adjust = tmp; // don't adjust
-				}
-				// get confidence value for the cropped img
-				int grammar_type = compute_confidence(tmp_adjust, modeljson, false)[1];
-				if (grammar_type % 2 == 0) {// doors
-					cropped_chips.push_back(tmp_adjust);
-				}
-			}
-		}
-	}
-	else {
-		// do nothing
-	}
-	return cropped_chips;
 }
 
 cv::Mat adjust_chip(cv::Mat chip) {
