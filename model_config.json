@@ -9,7 +9,6 @@
 			"number_paras":4,
 			"rangeOfRows":[3,12],
 			"rangeOfCols":[3,12],
-			"rangeOfGrouping":[1,1],
 			"relativeWidth":[0.3, 0.9],
 			"relativeHeight":[0.3, 0.9]
 		},
@@ -18,7 +17,6 @@
 			"number_paras":7,
 			"rangeOfRows":[3,12],
 			"rangeOfCols":[3,12],
-			"rangeOfGrouping":[1,1],
 			"rangeOfDoors":[2,6],
 			"relativeWidth":[0.3, 0.9],
 			"relativeHeight":[0.3, 0.9],
@@ -68,5 +66,6 @@
 	"dnnsOutFolder":"../dnnsOut",
 	"debug":true,
 	"defaultSize":[224, 224],
-	"targetChipSize":[30.0, 30.0]
+	"targetChipSize":[30.0, 30.0],
+	"reject_model":"../reject_model_classifier.pt"
 }

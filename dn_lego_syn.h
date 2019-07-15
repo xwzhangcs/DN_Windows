@@ -64,12 +64,14 @@ struct ModelInfo {
 	Grammar grammars[6];
 	std::string classifier_path;
 	int number_grammars;
+	std::string reject_model;
 
 };
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
-int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score);
+int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
+int reject(std::string img_name, std::string model_path, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug);
 void readMetajson(std::string metajson, FacadeInfo& fi);
 void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);

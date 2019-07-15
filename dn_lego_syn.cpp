@@ -10,6 +10,23 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	std::string path(argv[1]);
+	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
+	ModelInfo mi;
+	readModeljson(argv[3], mi);
+	for (int i = 0; i < clusters.size(); i++) {
+		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
+		for (int j = 0; j < metaFiles.size(); j++) {
+			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+			std::cout << metajson << ", " << img_filename << std::endl;
+			// read metajson
+			FacadeInfo fi;
+			readMetajson(metajson, fi);
+			cv::Mat croppedImage;
+			bool bvalid = chipping(fi, mi, croppedImage, true, true, img_filename);	
+		}
+	}
 	return 0;
 }
 
@@ -154,6 +171,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	fclose(fp);
 	mi.targetChipSize = util::read1DArray(docModel, "targetChipSize");
 	mi.defaultSize = util::read1DArray(docModel, "defaultSize");
+	mi.reject_model = util::readStringValue(docModel, "reject_model");
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	rapidjson::Value& grammars = docModel["grammars"];
 	// classifier
@@ -176,28 +194,57 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		mi.grammars[i].model_path = util::readStringValue(grammar, "model");
 		// number of paras
 		mi.grammars[i].number_paras = util::readNumber(grammar, "number_paras", 5);
-		// range of Rows
-		mi.grammars[i].rangeOfRows = util::read1DArray(grammar, "rangeOfRows");
-		// range of Cols
-		mi.grammars[i].rangeOfCols = util::read1DArray(grammar, "rangeOfCols");
-		// range of Grouping
-		mi.grammars[i].rangeOfGrouping = util::read1DArray(grammar, "rangeOfGrouping");
-		// range of relativeW
-		mi.grammars[i].relativeWidth = util::read1DArray(grammar, "relativeWidth");
-		// range of relativeH
-		mi.grammars[i].relativeHeight = util::read1DArray(grammar, "relativeHeight");
-		if (mi.grammars[i].number_paras == 8) {
-			// range of Doors
-			mi.grammars[i].rangeOfDoors = util::read1DArray(grammar, "rangeOfDoors");
-			// relativeDWidth
-			mi.grammars[i].relativeDWidth = util::read1DArray(grammar, "relativeDWidth");
-			// relativeDHeight
-			mi.grammars[i].relativeDHeight = util::read1DArray(grammar, "relativeDHeight");
+		if (i == 0 || i == 1) {
+			// range of Rows
+			mi.grammars[i].rangeOfRows = util::read1DArray(grammar, "rangeOfRows");
+			// range of Cols
+			mi.grammars[i].rangeOfCols = util::read1DArray(grammar, "rangeOfCols");
+			// range of relativeW
+			mi.grammars[i].relativeWidth = util::read1DArray(grammar, "relativeWidth");
+			// range of relativeH
+			mi.grammars[i].relativeHeight = util::read1DArray(grammar, "relativeHeight");
+			if (i == 1) {
+				// range of Doors
+				mi.grammars[i].rangeOfDoors = util::read1DArray(grammar, "rangeOfDoors");
+				// relativeDWidth
+				mi.grammars[i].relativeDWidth = util::read1DArray(grammar, "relativeDWidth");
+				// relativeDHeight
+				mi.grammars[i].relativeDHeight = util::read1DArray(grammar, "relativeDHeight");
+			}
+		}
+		else if (i == 2 || i == 3) {
+			// range of Cols
+			mi.grammars[i].rangeOfCols = util::read1DArray(grammar, "rangeOfCols");
+			// range of relativeW
+			mi.grammars[i].relativeWidth = util::read1DArray(grammar, "relativeWidth");
+			if (i == 3) {
+				// range of Doors
+				mi.grammars[i].rangeOfDoors = util::read1DArray(grammar, "rangeOfDoors");
+				// relativeDWidth
+				mi.grammars[i].relativeDWidth = util::read1DArray(grammar, "relativeDWidth");
+				// relativeDHeight
+				mi.grammars[i].relativeDHeight = util::read1DArray(grammar, "relativeDHeight");
+			}
+		}
+		else {
+			// range of Rows
+			mi.grammars[i].rangeOfRows = util::read1DArray(grammar, "rangeOfRows");
+			// range of relativeH
+			mi.grammars[i].relativeHeight = util::read1DArray(grammar, "relativeHeight");
+			if (i == 5) {
+				// range of Doors
+				mi.grammars[i].rangeOfDoors = util::read1DArray(grammar, "rangeOfDoors");
+				// relativeDWidth
+				mi.grammars[i].relativeDWidth = util::read1DArray(grammar, "relativeDWidth");
+				// relativeDHeight
+				mi.grammars[i].relativeDHeight = util::read1DArray(grammar, "relativeDHeight");
+			}
+
 		}
 	}
 }
 
-int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score) {
+int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug) {
 	int type = 0;
 	if (facadeSize[0] < targetSize[0]  && facadeSize[0] > 0.5 * targetSize[0] && facadeSize[1] < targetSize[1] && facadeSize[1] > 0.5 * targetSize[1] && score > 0.94) {
 		type = 1;
@@ -217,6 +264,69 @@ int reject(std::string img_name, std::vector<double> facadeSize, std::vector<dou
 	return type;
 }
 
+int reject(std::string img_name, std::string model_path, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug) {
+	// prepare inputs
+	cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat scale_img;
+	cv::resize(src_img, scale_img, cv::Size(defaultImgSize[0], defaultImgSize[1]));
+	cv::Mat dnn_img_rgb;
+	cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+	// reject model classifier
+	// Deserialize the ScriptModule from a file using torch::jit::load().
+	std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
+	reject_classifier_module->to(at::kCUDA);
+	assert(reject_classifier_module != nullptr);
+	torch::Tensor out_tensor = reject_classifier_module->forward(inputs).toTensor();
+
+	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+
+	double best_score = 0;
+	int best_class = -1;
+	for (int i = 0; i < 2; i++) {
+		double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+		if (tmp > best_score) {
+			best_score = tmp;
+			best_class = i;
+		}
+	}
+	if (bDebug) {
+		//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
+		std::cout << confidences_tensor.slice(1, 0, 2) << std::endl;
+		std::cout << "DNN class is " << best_class << std::endl;
+	}
+	if (best_class == 1) // bad facades
+		return 0;
+	else {
+		int type = 0;
+		if (facadeSize[0] < targetSize[0] && facadeSize[1] < targetSize[1]) {
+			type = 1;
+		}
+		else if (facadeSize[0] > targetSize[0] && facadeSize[1] < targetSize[1]) {
+			type = 2;
+		}
+		else if (facadeSize[0] < targetSize[0] && facadeSize[1] > targetSize[1]) {
+			type = 3;
+		}
+		else if (facadeSize[0] > targetSize[0] && facadeSize[1] > targetSize[1]) {
+			type = 4;
+		}
+		else {
+			// do nothing
+		}
+		return type;
+	}
+}
+
 bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename) {
 	// size of chip
 	std::vector<double> facadeSize = fi.facadeSize;
@@ -234,7 +344,15 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 		std::cout << "Please check the targetChipSize member in the JSON file" << std::endl;
 		return false;
 	}
-	int type = reject(img_name, facadeSize, targetSize, score);
+	if (bDebug) {
+		std::cout << "facadeSize is " << facadeSize << std::endl;
+		std::cout << "broof is " << broof << std::endl;
+		std::cout << "bground is " << bground << std::endl;
+		std::cout << "img_name is " << img_name << std::endl;
+		std::cout << "score is " << score << std::endl;
+		std::cout << "targetSize is " << targetSize << std::endl;
+	}
+	int type = reject(img_name, mi.reject_model, facadeSize, targetSize, mi.defaultSize, mi.debug);
 	if (type == 0) {
 		fi.valid = false;
 		return false;
