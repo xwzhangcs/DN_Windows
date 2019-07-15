@@ -1,4 +1,3 @@
-#include <torch/script.h> // One-stop header.
 #include "dn_lego_syn.h"
 #include <stack>
 #include "Utils.h"
@@ -14,6 +13,7 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	initial_models(mi);
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -244,6 +244,13 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	}
 }
 
+void initial_models(ModelInfo& mi) {
+	// load reject model
+	reject_classifier_module = torch::jit::load(mi.reject_model);
+	reject_classifier_module->to(at::kCUDA);
+	assert(reject_classifier_module != nullptr);
+}
+
 int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug) {
 	int type = 0;
 	if (facadeSize[0] < targetSize[0]  && facadeSize[0] > 0.5 * targetSize[0] && facadeSize[1] < targetSize[1] && facadeSize[1] > 0.5 * targetSize[1] && score > 0.94) {
@@ -283,9 +290,9 @@ int reject(std::string img_name, std::string model_path, std::vector<double> fac
 	inputs.push_back(img_tensor);
 	// reject model classifier
 	// Deserialize the ScriptModule from a file using torch::jit::load().
-	std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
-	reject_classifier_module->to(at::kCUDA);
-	assert(reject_classifier_module != nullptr);
+	//std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
+	//reject_classifier_module->to(at::kCUDA);
+	//assert(reject_classifier_module != nullptr);
 	torch::Tensor out_tensor = reject_classifier_module->forward(inputs).toTensor();
 
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
@@ -353,6 +360,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 		std::cout << "targetSize is " << targetSize << std::endl;
 	}
 	int type = reject(img_name, mi.reject_model, facadeSize, targetSize, mi.defaultSize, mi.debug);
+	return 0;
 	if (type == 0) {
 		fi.valid = false;
 		return false;

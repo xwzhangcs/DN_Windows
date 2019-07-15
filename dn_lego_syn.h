@@ -1,3 +1,4 @@
+#include <torch/script.h> // One-stop header.
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -9,9 +10,6 @@
 #include <dlib/rand.h>
 
 using namespace dlib;
-
-int const max_BINARY_value = 255;
-int const cluster_number = 2;
 
 // Holds information about a facade 
 struct FacadeInfo {
@@ -67,6 +65,9 @@ struct ModelInfo {
 	std::string reject_model;
 
 };
+/**** model variables *****/
+std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
+void initial_models(ModelInfo& mi);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
