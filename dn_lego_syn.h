@@ -52,6 +52,7 @@ struct Grammar {
 // Holds information about NNs
 struct ModelInfo {
 	std::string facadesFolder;
+	std::string invalidfacadesFolder;
 	std::string chipsFolder;
 	std::string segsFolder;
 	std::string dnnsInFolder;
@@ -81,7 +82,8 @@ cv::Mat deSkewImg(cv::Mat src_img);
 
 /**** steps *****/
 bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename);
-std::vector<cv::Mat> crop_chip(cv::Mat src_chip, int type, bool bground, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
+std::vector<cv::Mat> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
+std::vector<cv::Mat> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);

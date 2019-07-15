@@ -55,6 +55,7 @@
 		}
 	},
 	"facadesFolder":"../facades",
+	"invalidfacadesFolder":"../invalid_facades",
 	"facadesHisteqFolder":"../facadeshist",
 	"chipsFolder":"../chips",
 	"chipsFolderHisteq":"../chipshist",
@@ -66,6 +67,6 @@
 	"dnnsOutFolder":"../dnnsOut",
 	"debug":true,
 	"defaultSize":[224, 224],
-	"targetChipSize":[30.0, 30.0],
+	"targetChipSize":[20.0, 20.0],
 	"reject_model":"../reject_model_classifier.pt"
 }
