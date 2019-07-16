@@ -68,6 +68,8 @@ struct ModelInfo {
 };
 /**** model variables *****/
 std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
+std::shared_ptr<torch::jit::script::Module> classifier_module;
+std::vector<std::shared_ptr<torch::jit::script::Module>> grammar_models;
 void initial_models(ModelInfo& mi);
 
 /**** helper functions *****/
