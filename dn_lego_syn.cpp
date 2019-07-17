@@ -9,35 +9,15 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	cv::Mat src_img = cv::imread("../data/0000_new.png", CV_LOAD_IMAGE_UNCHANGED);
-	cv::Mat scale_img;
-	cv::resize(src_img, scale_img, cv::Size(256, 256));
-	cv::Mat dnn_img_rgb;
-	cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
-	cv::Mat img_float;
-	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
-	auto img_tensor = torch::from_blob(img_float.data, { 1, 256, 256, 3 }).to(torch::kCUDA);
-	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
-	/*img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
-	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
-	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);*/
-
-	std::vector<torch::jit::IValue> inputs;
-	inputs.push_back(img_tensor);
-
-	std::shared_ptr<torch::jit::script::Module> test_module = torch::jit::load("../data/seg_model.pt");
-	test_module->to(at::kCUDA);
-	assert(test_module != nullptr);
-	torch::Tensor out_tensor = test_module->forward(inputs).toTensor();
-	std::cout << "out_tensor is " << out_tensor << std::endl;
-
-	return 0;
-	// 
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
 	initial_models(mi);
+	cv::Mat src = cv::imread("../data/test/facade_00125_real_A.png", CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat dst_seg;
+	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/output_gray.png");
+	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -241,8 +221,10 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	docModel.ParseStream(isModel);
 	fclose(fp);
 	mi.targetChipSize = util::read1DArray(docModel, "targetChipSize");
+	mi.segImageSize = util::read1DArray(docModel, "segImageSize");
 	mi.defaultSize = util::read1DArray(docModel, "defaultSize");
 	mi.reject_model = util::readStringValue(docModel, "reject_model");
+	mi.seg_model = util::readStringValue(docModel, "seg_model");
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	rapidjson::Value& grammars = docModel["grammars"];
 	// classifier
@@ -321,6 +303,10 @@ void initial_models(ModelInfo& mi) {
 	reject_classifier_module = torch::jit::load(mi.reject_model);
 	reject_classifier_module->to(at::kCUDA);
 	assert(reject_classifier_module != nullptr);
+	// load segmentation model
+	seg_module = torch::jit::load(mi.seg_model);
+	seg_module->to(at::kCUDA);
+	assert(seg_module != nullptr);
 	// load grammar classifier model
 	classifier_module = torch::jit::load(mi.classifier_path);
 	classifier_module->to(at::kCUDA);
@@ -471,8 +457,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 		return false;
 	}
 	fi.valid = true;
-	cv::Mat src_facade;
-	src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	// choose the best chip
 	std::vector<cv::Mat> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	croppedImage = cropped_chips[2];// use the best chip to pass through those testings
@@ -678,6 +663,69 @@ std::vector<cv::Mat> crop_chip_ground(cv::Mat src_facade, int type, std::vector<
 		// do nothing
 	}
 	return cropped_chips;
+}
+
+void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo& mi, bool bDebug, std::string img_filename) {
+	int run_times = 3;
+	cv::Mat src_img = croppedImage.clone();
+	cv::Mat dnn_img_rgb;
+	cv::cvtColor(src_img, dnn_img_rgb, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+	std::vector<std::vector<int>> color_mark;
+	color_mark.resize((int)mi.segImageSize[1]);
+	for (int i = 0; i < color_mark.size(); i++) {
+		color_mark[i].resize((int)mi.segImageSize[0]);
+		for (int j = 0; j < color_mark[i].size(); j++) {
+			color_mark[i][j] = 0;
+		}
+	}
+	// run three times
+	for (int i = 0; i < run_times; i++) {
+		torch::Tensor out_tensor = seg_module->forward(inputs).toTensor();
+		out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
+		out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
+		//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
+		out_tensor = out_tensor.to(torch::kCPU);
+		cv::Mat resultImg((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+		std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
+		// gray img
+		// correct the color
+		for (int i = 0; i < resultImg.size().height; i++) {
+			for (int j = 0; j < resultImg.size().width; j++) {
+				if (resultImg.at<cv::Vec3b>(i, j)[0] > 160)
+					color_mark[i][j] += 0;
+				else
+					color_mark[i][j] += 1;
+			}
+		}
+		if (bDebug) {
+			cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
+			cv::imwrite("../data/test/" + to_string(i) + ".png", resultImg);
+		}
+	}
+	cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
+	int num_majority = ceil(0.5 * run_times);
+	for (int i = 0; i < color_mark.size(); i++) {
+		for (int j = 0; j < color_mark[i].size(); j++) {
+			if (color_mark[i][j] < num_majority)
+				gray_img.at<uchar>(i, j) = (uchar)0;
+			else
+				gray_img.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+	if (bDebug) {
+		std::cout << "num_majority is " << num_majority << std::endl;
+		cv::imwrite(img_filename, gray_img);
+	}
 }
 
 bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {

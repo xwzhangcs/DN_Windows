@@ -28,3 +28,4 @@ score.txt
 confidence.txt
 score.csv
 confidence.csv
+seg_model.pt

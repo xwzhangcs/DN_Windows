@@ -60,14 +60,16 @@ struct ModelInfo {
 	bool debug;
 	std::vector<double> defaultSize;
 	std::vector<double> targetChipSize;
+	std::vector<double> segImageSize;
 	Grammar grammars[6];
 	std::string classifier_path;
 	int number_grammars;
 	std::string reject_model;
-
+	std::string seg_model;
 };
 /**** model variables *****/
 std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
+std::shared_ptr<torch::jit::script::Module> seg_module;
 std::shared_ptr<torch::jit::script::Module> classifier_module;
 std::vector<std::shared_ptr<torch::jit::script::Module>> grammar_models;
 void initial_models(ModelInfo& mi);
@@ -81,6 +83,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);
 cv::Mat cleanAlignedImage(cv::Mat src, float threshold);
 cv::Mat deSkewImg(cv::Mat src_img);
+void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo& mi, bool bDebug, std::string img_filename);
 
 /**** steps *****/
 bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename);
