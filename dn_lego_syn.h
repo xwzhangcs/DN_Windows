@@ -57,6 +57,8 @@ struct ModelInfo {
 	std::string segsFolder;
 	std::string dnnsInFolder;
 	std::string dnnsOutFolder;
+	std::string dilatesFolder;
+	std::string alignsFolder;
 	bool debug;
 	std::vector<double> defaultSize;
 	std::vector<double> targetChipSize;

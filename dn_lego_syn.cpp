@@ -14,16 +14,16 @@ int main(int argc, const char* argv[]) {
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
 	initial_models(mi);
-	cv::Mat src = cv::imread("../data/test/facade_00125_real_A.png", CV_LOAD_IMAGE_UNCHANGED);
+	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
-	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/output_gray.png");
-	return 0;
+	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
+	return 0;*/
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-			std::cout << metajson << ", " << img_filename << std::endl;
+			//std::cout << metajson << ", " << img_filename << std::endl;
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
@@ -32,6 +32,12 @@ int main(int argc, const char* argv[]) {
 			if (bvalid) {
 				cv::Mat dnn_img;
 				segment_chip(croppedImage, dnn_img, fi, mi, true, img_filename);
+				std::vector<double> predictions = feedDnn(dnn_img, fi, mi, true, img_filename);
+				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
+					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
+					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
+					synthesis(predictions, croppedImage.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, true, img_filename);
+				}
 			}
 			//writeMetajson(metajson, fi);
 		}
@@ -239,6 +245,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.segsFolder = util::readStringValue(docModel, "segsFolder");
 	mi.dnnsInFolder = util::readStringValue(docModel, "dnnsInFolder");
 	mi.dnnsOutFolder = util::readStringValue(docModel, "dnnsOutFolder");
+	mi.dilatesFolder = util::readStringValue(docModel, "dilatesFolder");
+	mi.alignsFolder = util::readStringValue(docModel, "alignsFolder");
 	// get grammars
 	for (int i = 0; i < mi.number_grammars; i++) {
 		std::string grammar_name = "grammar" + std::to_string(i + 1);
@@ -378,7 +386,7 @@ int reject(std::string img_name, std::string model_path, std::vector<double> fac
 	if (bDebug) {
 		//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
 		std::cout << confidences_tensor.slice(1, 0, 2) << std::endl;
-		std::cout << "DNN class is " << best_class << std::endl;
+		std::cout << "Reject class is " << best_class << std::endl;
 	}
 	if (best_class == 1) // bad facades
 		return 0;
@@ -420,13 +428,6 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 		std::cout << "Please check the targetChipSize member in the JSON file" << std::endl;
 		return false;
 	}
-	if (bDebug) {
-		std::cout << "facadeSize is " << facadeSize << std::endl;
-		std::cout << "broof is " << broof << std::endl;
-		std::cout << "bground is " << bground << std::endl;
-		std::cout << "score is " << score << std::endl;
-		std::cout << "targetSize is " << targetSize << std::endl;
-	}
 	// if it's not a roof
 	int type = 0;
 	if(!broof)
@@ -455,6 +456,13 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 			cv::imwrite(mi.invalidfacadesFolder + "/" + img_filename, src);
 		}
 		return false;
+	}
+	if (bDebug) {
+		std::cout << "facadeSize is " << facadeSize << std::endl;
+		std::cout << "broof is " << broof << std::endl;
+		std::cout << "bground is " << bground << std::endl;
+		std::cout << "score is " << score << std::endl;
+		std::cout << "targetSize is " << targetSize << std::endl;
 	}
 	fi.valid = true;
 	cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
@@ -668,6 +676,8 @@ std::vector<cv::Mat> crop_chip_ground(cv::Mat src_facade, int type, std::vector<
 void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	int run_times = 3;
 	cv::Mat src_img = croppedImage.clone();
+	// scale to seg size
+	cv::resize(src_img, src_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
 	cv::Mat dnn_img_rgb;
 	cv::cvtColor(src_img, dnn_img_rgb, CV_BGR2RGB);
 	cv::Mat img_float;
@@ -707,10 +717,10 @@ void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo&
 					color_mark[i][j] += 1;
 			}
 		}
-		if (bDebug) {
+		/*if (bDebug) {
 			cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
-			cv::imwrite("../data/test/" + to_string(i) + ".png", resultImg);
-		}
+			cv::imwrite("../data/test/seg_" + to_string(i) + ".png", resultImg);
+		}*/
 	}
 	cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
 	int num_majority = ceil(0.5 * run_times);
@@ -722,9 +732,10 @@ void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo&
 				gray_img.at<uchar>(i, j) = (uchar)255;
 		}
 	}
+	// scale to grammar size
+	cv::resize(gray_img, dst_seg, croppedImage.size());
 	if (bDebug) {
 		std::cout << "num_majority is " << num_majority << std::endl;
-		cv::imwrite(img_filename, gray_img);
 	}
 }
 
@@ -732,11 +743,11 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelI
 	// default size for NN
 	int width = mi.defaultSize[0];
 	int height = mi.defaultSize[1];
-	// segmentation
-	cv::Mat dst_seg = croppedImage.clone();
-	// generate input image for DNN
 	cv::Scalar bg_color(255, 255, 255); // white back ground
 	cv::Scalar window_color(0, 0, 0); // black for windows
+	// segmentation
+	cv::Mat dst_seg;
+	apply_segmentation_model(croppedImage, dst_seg, mi, true, img_filename);
 	cv::Mat scale_img;
 	cv::resize(dst_seg, scale_img, cv::Size(width, height));
 	// correct the color
@@ -839,7 +850,13 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelI
 		fi.win_color[i] = win_avg_color.val[i];
 		fi.bg_color[i] = bg_avg_color.val[i];
 	}
-
+	if (bDebug) {
+		cv::imwrite(mi.segsFolder + "/" + img_filename, dst_seg);
+		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
+		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
+		cv::imwrite(mi.alignsFolder + "/" + img_filename, aligned_img);
+		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, dnn_img);
+	}
 	return true;
 }
 
@@ -848,7 +865,7 @@ std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool
 	std::string classifier_name = mi.classifier_path;
 	int num_classes = mi.number_grammars;
 	cv::Mat dnn_img_rgb;
-	cv::cvtColor(dnn_img, dnn_img_rgb, CV_BGR2RGB);
+	cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
 	cv::Mat img_float;
 	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
 	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
@@ -883,7 +900,7 @@ std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool
 		}
 		best_class = best_class + 1;
 		std::cout << "DNN class is " << best_class << std::endl;
-	}
+	} 
 	// adjust the best_class
 	if (!fi.ground) {
 		if (best_class % 2 == 0)
@@ -1165,6 +1182,12 @@ std::vector<double> grammar1(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	int img_groups = 1;
 	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = paras[3] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	if (bDebug) {
+		std::cout << "paras[0] is " << paras[0] << std::endl;
+		std::cout << "paras[1] is " << paras[1] << std::endl;
+		std::cout << "img_rows is " << paras[0] * (imageRows.second - imageRows.first) + imageRows.first << std::endl;
+		std::cout << "img_cols is " << paras[1] * (imageCols.second - imageCols.first) + imageCols.first<< std::endl;
+	}
 	std::vector<double> results;
 	results.push_back(img_rows);
 	results.push_back(img_cols);
