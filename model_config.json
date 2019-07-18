@@ -67,6 +67,7 @@
 	"dnnsOutFolder":"../dnnsOut",
 	"debug":true,
 	"defaultSize":[224, 224],
+	"paddingSize":[5, 5],
 	"segImageSize":[256, 256],
 	"targetChipSize":[20.0, 20.0],
 	"reject_model":"../reject_model_classifier.pt",

@@ -61,6 +61,7 @@ struct ModelInfo {
 	std::string alignsFolder;
 	bool debug;
 	std::vector<double> defaultSize;
+	std::vector<double> paddingSize;
 	std::vector<double> targetChipSize;
 	std::vector<double> segImageSize;
 	Grammar grammars[6];
@@ -85,13 +86,16 @@ void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);
 cv::Mat cleanAlignedImage(cv::Mat src, float threshold);
 cv::Mat deSkewImg(cv::Mat src_img);
-void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo& mi, bool bDebug, std::string img_filename);
+void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInfo& mi, bool bDebug, std::string img_filename);
+std::vector<int> adjust_chip(cv::Mat chip);
+int choose_best_chip(std::vector<cv::Mat> chips, ModelInfo& mi, bool bDebug, std::string img_filename);
+std::vector<double> compute_chip_info(cv::Mat chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 
 /**** steps *****/
-bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename);
+bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleChips, bool bDebug, std::string img_filename);
 std::vector<cv::Mat> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 std::vector<cv::Mat> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
-bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
+bool process_chip(cv::Mat chip_seg, cv::Mat& dnn_img, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
 

@@ -23,20 +23,20 @@ int main(int argc, const char* argv[]) {
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-			//std::cout << metajson << ", " << img_filename << std::endl;
+			std::cout << metajson << ", " << img_filename << std::endl;
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
-			cv::Mat croppedImage;
-			bool bvalid = chipping(fi, mi, croppedImage, true, true, img_filename);	
+			cv::Mat chip_seg;
+			bool bvalid = chipping(fi, mi, chip_seg, true, true, img_filename);
 			if (bvalid) {
 				cv::Mat dnn_img;
-				segment_chip(croppedImage, dnn_img, fi, mi, true, img_filename);
+				process_chip(chip_seg, dnn_img, mi, true, img_filename);
 				std::vector<double> predictions = feedDnn(dnn_img, fi, mi, true, img_filename);
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
 					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
 					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
-					synthesis(predictions, croppedImage.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, true, img_filename);
+					synthesis(predictions, chip_seg.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, true, img_filename);
 				}
 			}
 			//writeMetajson(metajson, fi);
@@ -229,6 +229,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.targetChipSize = util::read1DArray(docModel, "targetChipSize");
 	mi.segImageSize = util::read1DArray(docModel, "segImageSize");
 	mi.defaultSize = util::read1DArray(docModel, "defaultSize");
+	mi.paddingSize = util::read1DArray(docModel, "paddingSize");
 	mi.reject_model = util::readStringValue(docModel, "reject_model");
 	mi.seg_model = util::readStringValue(docModel, "seg_model");
 	mi.debug = util::readBoolValue(docModel, "debug", false);
@@ -411,7 +412,7 @@ int reject(std::string img_name, std::string model_path, std::vector<double> fac
 	}
 }
 
-bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultipleChips, bool bDebug, std::string img_filename) {
+bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleChips, bool bDebug, std::string img_filename) {
 	// size of chip
 	std::vector<double> facadeSize = fi.facadeSize;
 	// roof 
@@ -468,7 +469,9 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 	cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	// choose the best chip
 	std::vector<cv::Mat> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
-	croppedImage = cropped_chips[2];// use the best chip to pass through those testings
+	cv::Mat croppedImage = cropped_chips[choose_best_chip(cropped_chips, mi, bDebug, img_filename)];// use the best chip to pass through those testings
+	// segmentation
+	apply_segmentation_model(croppedImage, chip_seg, mi, true, img_filename);
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
@@ -476,6 +479,59 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 	int src_height = src_facade.size().height;
 	fi.chip_size.push_back(chip_width * 1.0 / src_width * facadeSize[0]);
 	fi.chip_size.push_back(chip_height * 1.0 / src_height * facadeSize[1]);
+	// write back to json file
+	cv::Scalar bg_avg_color(0, 0, 0);
+	cv::Scalar win_avg_color(0, 0, 0);
+	{
+		int bg_count = 0;
+		int win_count = 0;
+		for (int i = 0; i < chip_seg.size().height; i++) {
+			for (int j = 0; j < chip_seg.size().width; j++) {
+				if ((int)chip_seg.at<uchar>(i, j) == 0) {
+					if (croppedImage.channels() == 4) {
+						win_avg_color.val[0] += croppedImage.at<cv::Vec4b>(i, j)[0];
+						win_avg_color.val[1] += croppedImage.at<cv::Vec4b>(i, j)[1];
+						win_avg_color.val[2] += croppedImage.at<cv::Vec4b>(i, j)[2];
+					}
+					if (croppedImage.channels() == 3) {
+						win_avg_color.val[0] += croppedImage.at<cv::Vec3b>(i, j)[0];
+						win_avg_color.val[1] += croppedImage.at<cv::Vec3b>(i, j)[1];
+						win_avg_color.val[2] += croppedImage.at<cv::Vec3b>(i, j)[2];
+					}
+					win_count++;
+				}
+				else {
+					if (croppedImage.channels() == 4) {
+						bg_avg_color.val[0] += croppedImage.at<cv::Vec4b>(i, j)[0];
+						bg_avg_color.val[1] += croppedImage.at<cv::Vec4b>(i, j)[1];
+						bg_avg_color.val[2] += croppedImage.at<cv::Vec4b>(i, j)[2];
+					}
+					if (croppedImage.channels() == 3) {
+						bg_avg_color.val[0] += croppedImage.at<cv::Vec3b>(i, j)[0];
+						bg_avg_color.val[1] += croppedImage.at<cv::Vec3b>(i, j)[1];
+						bg_avg_color.val[2] += croppedImage.at<cv::Vec3b>(i, j)[2];
+					}
+					bg_count++;
+				}
+			}
+		}
+		if (win_count > 0) {
+			win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+			win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+			win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+		}
+		if (bg_count > 0) {
+			bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+			bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+		}
+	}
+	fi.win_color.resize(3);
+	fi.bg_color.resize(3);
+	for (int i = 0; i < 3; i++) {
+		fi.win_color[i] = win_avg_color.val[i];
+		fi.bg_color[i] = bg_avg_color.val[i];
+	}
 
 	if (bDebug) {
 		/*for (int i = 0; i < cropped_chips.size(); i++) {
@@ -484,6 +540,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& croppedImage, bool bMultip
 		std::cout << "Facade type is " << type << std::endl;
 		cv::imwrite(mi.facadesFolder + "/" + img_filename, src_facade);
 		cv::imwrite(mi.chipsFolder + "/" + img_filename, croppedImage);
+		cv::imwrite(mi.segsFolder + "/" + img_filename, chip_seg);
 	}
 	return true;
 }
@@ -673,7 +730,153 @@ std::vector<cv::Mat> crop_chip_ground(cv::Mat src_facade, int type, std::vector<
 	return cropped_chips;
 }
 
-void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo& mi, bool bDebug, std::string img_filename) {
+std::vector<double> compute_chip_info(cv::Mat chip, ModelInfo& mi, bool bDebug, std::string img_filename) {
+	std::vector<double> chip_info;
+	cv::Mat chip_src = chip.clone();
+	cv::Mat chip_seg;
+	apply_segmentation_model(chip_src, chip_seg, mi, false, img_filename);
+	cv::Mat dnn_img;
+	process_chip(chip_seg, dnn_img, mi, false, img_filename);
+	// go to grammar classifier
+	int num_classes = mi.number_grammars;
+	cv::Mat dnn_img_rgb;
+	cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+
+	int best_class = -1;
+	// Deserialize the ScriptModule from a file using torch::jit::load().
+	torch::Tensor out_tensor = classifier_module->forward(inputs).toTensor();
+	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+	//std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
+	double best_score = 0;
+	for (int i = 0; i < num_classes; i++) {
+		double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+		if (tmp > best_score) {
+			best_score = tmp;
+			best_class = i;
+		}
+	}
+	// currently only add confidence value to the info vector
+	chip_info.push_back(best_score);
+	if (bDebug)
+	{
+		cv::imwrite(img_filename, chip_src);
+	}
+	return chip_info;
+}
+
+int choose_best_chip(std::vector<cv::Mat> chips, ModelInfo& mi, bool bDebug, std::string img_filename) {
+	int best_chip_id = 0;
+	if (chips.size() == 1)
+		best_chip_id = 0;
+	else {
+		std::vector<double> confidence_values;
+		confidence_values.resize(chips.size());
+		for (int i = 0; i < chips.size(); i++) {
+			std::string filename = "../data/chips/" + img_filename.substr(0, img_filename.find(".png")) + "_" +to_string(i) +".png";
+			confidence_values[i] = compute_chip_info(chips[i], mi, bDebug, filename)[0];
+			if (bDebug) {
+				std::cout << "chip " << i<< " score is " << confidence_values[i] << std::endl;
+			}
+		}
+		// find the best chip id
+		best_chip_id = std::max_element(confidence_values.begin(), confidence_values.end()) - confidence_values.begin();
+		if (bDebug) {
+			std::cout << "best_chip_id is " << best_chip_id << std::endl;
+		}
+	}
+	return best_chip_id;
+}
+
+std::vector<int> adjust_chip(cv::Mat chip) {
+	std::vector<int> boundaries;
+	boundaries.resize(4); // top, bottom, left and right
+	if (chip.channels() != 1) {
+		boundaries[0] = 0;
+		boundaries[1] = chip.size().height - 1;
+		boundaries[2] = 0;
+		boundaries[3] = chip.size().width - 1;
+		return boundaries;
+	}
+	// find the boundary
+	double threshold = 0.9;
+	bool bStopscan = false;
+	// top 
+	int pos_top = 0;
+	for (int i = 0; i < chip.size().height; i++) {
+		if (bStopscan)
+			break;
+		for (int j = 0; j < chip.size().width; j++) {
+			if ((int)chip.at<uchar>(i, j) == 0) {
+				pos_top = i;
+				bStopscan = true;
+				break;
+			}
+		}
+	}
+	// bottom 
+	bStopscan = false;
+	int pos_bot = 0;
+	for (int i = chip.size().height - 1; i >= 0; i--) {
+		if (bStopscan)
+			break;
+		for (int j = 0; j < chip.size().width; j++) {
+			//noise
+			if ((int)chip.at<uchar>(i, j) == 0) {
+				pos_bot = i;
+				bStopscan = true;
+				break;
+			}
+		}
+	}
+
+	// left
+	bStopscan = false;
+	int pos_left = 0;
+	for (int i = 0; i < chip.size().width; i++) {
+		if (bStopscan)
+			break;
+		for (int j = 0; j < chip.size().height; j++) {
+			//noise
+			if ((int)chip.at<uchar>(j, i) == 0) {
+				pos_left = i;
+				bStopscan = true;
+				break;
+			}
+		}
+	}
+	// right
+	bStopscan = false;
+	int pos_right = 0;
+	for (int i = chip.size().width - 1; i >= 0; i--) {
+		if (bStopscan)
+			break;
+		for (int j = 0; j < chip.size().height; j++) {
+			//noise
+			if ((int)chip.at<uchar>(j, i) == 0) {
+				pos_right = i;
+				bStopscan = true;
+				break;
+			}
+		}
+	}
+	boundaries[0] = pos_top;
+	boundaries[1] = pos_bot;
+	boundaries[2] = pos_left;
+	boundaries[3] = pos_right;
+	return boundaries;
+}
+
+void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	int run_times = 3;
 	cv::Mat src_img = croppedImage.clone();
 	// scale to seg size
@@ -733,23 +936,35 @@ void apply_segmentation_model(cv::Mat croppedImage, cv::Mat &dst_seg, ModelInfo&
 		}
 	}
 	// scale to grammar size
-	cv::resize(gray_img, dst_seg, croppedImage.size());
+	cv::resize(gray_img, chip_seg, croppedImage.size());
+	// correct the color
+	for (int i = 0; i < chip_seg.size().height; i++) {
+		for (int j = 0; j < chip_seg.size().width; j++) {
+			//noise
+			if ((int)chip_seg.at<uchar>(i, j) < 128) {
+				chip_seg.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				chip_seg.at<uchar>(i, j) = (uchar)255;
+		}
+	}
 	if (bDebug) {
 		std::cout << "num_majority is " << num_majority << std::endl;
 	}
+	//adjust boundaries
+	std::vector<int> boundaries = adjust_chip(chip_seg);
+	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 }
 
-bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {
+bool process_chip(cv::Mat chip_seg, cv::Mat& dnn_img, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	// default size for NN
-	int width = mi.defaultSize[0];
-	int height = mi.defaultSize[1];
+	int width = mi.defaultSize[0] - 2 * mi.paddingSize[0];
+	int height = mi.defaultSize[1] - 2 * mi.paddingSize[1];
 	cv::Scalar bg_color(255, 255, 255); // white back ground
 	cv::Scalar window_color(0, 0, 0); // black for windows
-	// segmentation
-	cv::Mat dst_seg;
-	apply_segmentation_model(croppedImage, dst_seg, mi, true, img_filename);
 	cv::Mat scale_img;
-	cv::resize(dst_seg, scale_img, cv::Size(width, height));
+	cv::resize(chip_seg, scale_img, cv::Size(width, height));
 	// correct the color
 	for (int i = 0; i < scale_img.size().height; i++) {
 		for (int j = 0; j < scale_img.size().width; j++) {
@@ -771,11 +986,10 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelI
 	// alignment
 	cv::Mat aligned_img = deSkewImg(dilation_dst);
 	// add padding
-	int padding_size = 5;
+	int padding_size = mi.paddingSize[0];
 	int borderType = cv::BORDER_CONSTANT;
-	cv::Scalar value(255, 255, 255);
 	cv::Mat aligned_img_padding;
-	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, value);
+	cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, bg_color);
 
 	// find contours
 	std::vector<std::vector<cv::Point> > contours;
@@ -794,65 +1008,7 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelI
 		if (hierarchy[i][3] != 0) continue;
 		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
 	}
-	// remove padding
-	dnn_img = dnn_img(cv::Rect(padding_size, padding_size, width, height));
-
-	// write back to json file
-	cv::Scalar bg_avg_color(0, 0, 0);
-	cv::Scalar win_avg_color(0, 0, 0);
-	{
-		int bg_count = 0;
-		int win_count = 0;
-		for (int i = 0; i < dst_seg.size().height; i++) {
-			for (int j = 0; j < dst_seg.size().width; j++) {
-				if ((int)dst_seg.at<uchar>(i, j) == 0) {
-					if (croppedImage.channels() == 4) {
-						win_avg_color.val[0] += croppedImage.at<cv::Vec4b>(i, j)[0];
-						win_avg_color.val[1] += croppedImage.at<cv::Vec4b>(i, j)[1];
-						win_avg_color.val[2] += croppedImage.at<cv::Vec4b>(i, j)[2];
-					}
-					if (croppedImage.channels() == 3) {
-						win_avg_color.val[0] += croppedImage.at<cv::Vec3b>(i, j)[0];
-						win_avg_color.val[1] += croppedImage.at<cv::Vec3b>(i, j)[1];
-						win_avg_color.val[2] += croppedImage.at<cv::Vec3b>(i, j)[2];
-					}
-					win_count++;
-				}
-				else {
-					if (croppedImage.channels() == 4) {
-						bg_avg_color.val[0] += croppedImage.at<cv::Vec4b>(i, j)[0];
-						bg_avg_color.val[1] += croppedImage.at<cv::Vec4b>(i, j)[1];
-						bg_avg_color.val[2] += croppedImage.at<cv::Vec4b>(i, j)[2];
-					}
-					if (croppedImage.channels() == 3) {
-						bg_avg_color.val[0] += croppedImage.at<cv::Vec3b>(i, j)[0];
-						bg_avg_color.val[1] += croppedImage.at<cv::Vec3b>(i, j)[1];
-						bg_avg_color.val[2] += croppedImage.at<cv::Vec3b>(i, j)[2];
-					}
-					bg_count++;
-				}
-			}
-		}
-		if (win_count > 0) {
-			win_avg_color.val[0] = win_avg_color.val[0] / win_count;
-			win_avg_color.val[1] = win_avg_color.val[1] / win_count;
-			win_avg_color.val[2] = win_avg_color.val[2] / win_count;
-		}
-		if (bg_count > 0) {
-			bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
-			bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
-			bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
-		}
-	}
-	fi.win_color.resize(3);
-	fi.bg_color.resize(3);
-	for (int i = 0; i < 3; i++) {
-		fi.win_color[i] = win_avg_color.val[i];
-		fi.bg_color[i] = bg_avg_color.val[i];
-	}
 	if (bDebug) {
-		cv::imwrite(mi.segsFolder + "/" + img_filename, dst_seg);
-		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
 		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
 		cv::imwrite(mi.alignsFolder + "/" + img_filename, aligned_img);
 		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, dnn_img);
@@ -861,8 +1017,6 @@ bool segment_chip(cv::Mat croppedImage, cv::Mat& dnn_img, FacadeInfo& fi, ModelI
 }
 
 std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {
-	// path of DN model
-	std::string classifier_name = mi.classifier_path;
 	int num_classes = mi.number_grammars;
 	cv::Mat dnn_img_rgb;
 	cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
@@ -1121,7 +1275,7 @@ cv::Mat deSkewImg(cv::Mat src_img) {
 			}
 		}
 	}
-	drawing = drawing(cv::Rect(padding_size, padding_size, 224, 224));
+	drawing = drawing(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
 	cv::Mat aligned_img = cleanAlignedImage(drawing, 0.10);
 	return aligned_img;
 }
