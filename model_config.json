@@ -7,8 +7,8 @@
 		"grammar1":{
 			"model":"../lego_model_grammar1.pt",
 			"number_paras":4,
-			"rangeOfRows":[3,12],
-			"rangeOfCols":[3,12],
+			"rangeOfRows":[2,12],
+			"rangeOfCols":[2,12],
 			"relativeWidth":[0.3, 0.9],
 			"relativeHeight":[0.3, 0.9]
 		},
