@@ -36,7 +36,7 @@ struct FacadeInfo {
 
 // Hold information about Grammars
 struct Grammar {
-	std::string model_path;
+	std::shared_ptr<torch::jit::script::Module> grammar_model;
 	int number_paras;
 	int grammar_id;
 	std::vector<double> rangeOfRows;
@@ -65,22 +65,16 @@ struct ModelInfo {
 	std::vector<double> targetChipSize;
 	std::vector<double> segImageSize;
 	Grammar grammars[6];
-	std::string classifier_path;
+	std::shared_ptr<torch::jit::script::Module> classifier_module;
 	int number_grammars;
-	std::string reject_model;
-	std::string seg_model;
+	std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
+	std::shared_ptr<torch::jit::script::Module> seg_module;
 };
-/**** model variables *****/
-std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
-std::shared_ptr<torch::jit::script::Module> seg_module;
-std::shared_ptr<torch::jit::script::Module> classifier_module;
-std::vector<std::shared_ptr<torch::jit::script::Module>> grammar_models;
-void initial_models(ModelInfo& mi);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
-int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
-int reject(std::string img_name, std::string model_path, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug);
+int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
+int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug);
 void readMetajson(std::string metajson, FacadeInfo& fi);
 void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);

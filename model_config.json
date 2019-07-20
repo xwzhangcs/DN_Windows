@@ -26,7 +26,7 @@
 		"grammar3":{
 			"model":"../lego_model_grammar3.pt",
 			"number_paras":2,
-			"rangeOfCols":[3,12],
+			"rangeOfCols":[2,12],
 			"relativeWidth":[0.3, 0.9]
 		},
 		"grammar4":{
@@ -41,7 +41,7 @@
 		"grammar5":{
 			"model":"../lego_model_grammar5.pt",
 			"number_paras":2,
-			"rangeOfRows":[3,12],
+			"rangeOfRows":[2,12],
 			"relativeHeight":[0.3, 0.9]
 		},
 		"grammar6":{

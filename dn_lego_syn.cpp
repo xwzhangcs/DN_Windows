@@ -13,7 +13,6 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	initial_models(mi);
 	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
 	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
@@ -28,15 +27,15 @@ int main(int argc, const char* argv[]) {
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
 			cv::Mat chip_seg;
-			bool bvalid = chipping(fi, mi, chip_seg, true, true, img_filename);
+			bool bvalid = chipping(fi, mi, chip_seg, true, mi.debug, img_filename);
 			if (bvalid) {
 				cv::Mat dnn_img;
-				process_chip(chip_seg, dnn_img, mi, true, img_filename);
-				std::vector<double> predictions = feedDnn(dnn_img, fi, mi, true, img_filename);
+				process_chip(chip_seg, dnn_img, mi, mi.debug, img_filename);
+				std::vector<double> predictions = feedDnn(dnn_img, fi, mi, mi.debug, img_filename);
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
 					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
 					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
-					synthesis(predictions, chip_seg.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, true, img_filename);
+					synthesis(predictions, chip_seg.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
 				}
 			}
 			//writeMetajson(metajson, fi);
@@ -230,14 +229,26 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.segImageSize = util::read1DArray(docModel, "segImageSize");
 	mi.defaultSize = util::read1DArray(docModel, "defaultSize");
 	mi.paddingSize = util::read1DArray(docModel, "paddingSize");
-	mi.reject_model = util::readStringValue(docModel, "reject_model");
-	mi.seg_model = util::readStringValue(docModel, "seg_model");
+	std::string reject_model = util::readStringValue(docModel, "reject_model");
+	// load reject model
+	mi.reject_classifier_module = torch::jit::load(reject_model);
+	mi.reject_classifier_module->to(at::kCUDA);
+	assert(mi.reject_classifier_module != nullptr);
+	std::string seg_model = util::readStringValue(docModel, "seg_model");
+	// load segmentation model
+	mi.seg_module = torch::jit::load(seg_model);
+	mi.seg_module->to(at::kCUDA);
+	assert(mi.seg_module != nullptr);
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	rapidjson::Value& grammars = docModel["grammars"];
 	// classifier
 	rapidjson::Value& grammar_classifier = grammars["classifier"];
 	// path of DN model
-	mi.classifier_path = util::readStringValue(grammar_classifier, "model");
+	std::string classifier_path = util::readStringValue(grammar_classifier, "model");
+	// load grammar classifier model
+	mi.classifier_module = torch::jit::load(classifier_path);
+	mi.classifier_module->to(at::kCUDA);
+	assert(mi.classifier_module != nullptr);
 	mi.number_grammars = util::readNumber(grammar_classifier, "number_paras", 6);
 	// get facade folder path
 	mi.facadesFolder = util::readStringValue(docModel, "facadesFolder");
@@ -254,7 +265,10 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		rapidjson::Value& grammar = grammars[grammar_name.c_str()];
 		// path of DN model
 		mi.grammars[i].grammar_id = i + 1;
-		mi.grammars[i].model_path = util::readStringValue(grammar, "model");
+		std::string model_path = util::readStringValue(grammar, "model");
+		mi.grammars[i].grammar_model = torch::jit::load(model_path);
+		mi.grammars[i].grammar_model->to(at::kCUDA);
+		assert(mi.grammars[i].grammar_model != nullptr);
 		// number of paras
 		mi.grammars[i].number_paras = util::readNumber(grammar, "number_paras", 5);
 		if (i == 0 || i == 1) {
@@ -307,29 +321,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	}
 }
 
-void initial_models(ModelInfo& mi) {
-	// load reject model
-	reject_classifier_module = torch::jit::load(mi.reject_model);
-	reject_classifier_module->to(at::kCUDA);
-	assert(reject_classifier_module != nullptr);
-	// load segmentation model
-	seg_module = torch::jit::load(mi.seg_model);
-	seg_module->to(at::kCUDA);
-	assert(seg_module != nullptr);
-	// load grammar classifier model
-	classifier_module = torch::jit::load(mi.classifier_path);
-	classifier_module->to(at::kCUDA);
-	assert(classifier_module != nullptr);
-	// load grammar models
-	grammar_models.resize(mi.number_grammars);
-	for (int i = 0; i < mi.number_grammars; i++) {
-		grammar_models[i] = torch::jit::load(mi.grammars[i].model_path);
-		grammar_models[i]->to(at::kCUDA);
-		assert(module != nullptr);
-	}
-}
-
-int reject(std::string img_name, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug) {
+int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug) {
 	int type = 0;
 	if (facadeSize[0] < targetSize[0]  && facadeSize[0] > 0.5 * targetSize[0] && facadeSize[1] < targetSize[1] && facadeSize[1] > 0.5 * targetSize[1] && score > 0.94) {
 		type = 1;
@@ -349,9 +341,8 @@ int reject(std::string img_name, std::vector<double> facadeSize, std::vector<dou
 	return type;
 }
 
-int reject(std::string img_name, std::string model_path, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug) {
+int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug) {
 	// prepare inputs
-	cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat scale_img;
 	cv::resize(src_img, scale_img, cv::Size(defaultImgSize[0], defaultImgSize[1]));
 	cv::Mat dnn_img_rgb;
@@ -371,7 +362,7 @@ int reject(std::string img_name, std::string model_path, std::vector<double> fac
 	//std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
 	//reject_classifier_module->to(at::kCUDA);
 	//assert(reject_classifier_module != nullptr);
-	torch::Tensor out_tensor = reject_classifier_module->forward(inputs).toTensor();
+	torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
 
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 
@@ -421,6 +412,9 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 	bool bground = fi.ground;
 	// image file
 	std::string img_name = fi.imgName;
+	cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+	if (src_facade.channels() == 4) // ensure there're 3 channels
+		cv::cvtColor(src_facade, src_facade, CV_BGRA2BGR);
 	// score
 	double score = fi.score;
 	// first decide whether it's a valid chip
@@ -432,29 +426,28 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 	// if it's not a roof
 	int type = 0;
 	if(!broof)
-		type = reject(img_name, mi.reject_model, facadeSize, targetSize, mi.defaultSize, mi.debug);
+		type = reject(src_facade, mi, facadeSize, targetSize, mi.defaultSize, mi.debug);
 	if (type == 0) {
 		fi.valid = false;
 		// compute avg color
 		cv::Scalar avg_color(0, 0, 0);
-		cv::Mat src = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-		for (int i = 0; i < src.size().height; i++) {
-			for (int j = 0; j < src.size().width; j++) {
+		for (int i = 0; i < src_facade.size().height; i++) {
+			for (int j = 0; j < src_facade.size().width; j++) {
 				for (int c = 0; c < 3; c++) {
-					if (src.channels() == 4)
-						avg_color.val[c] += src.at<cv::Vec4b>(i, j)[c];
-					if (src.channels() == 3)
-						avg_color.val[c] += src.at<cv::Vec3b>(i, j)[c];
+					if (src_facade.channels() == 4)
+						avg_color.val[c] += src_facade.at<cv::Vec4b>(i, j)[c];
+					if (src_facade.channels() == 3)
+						avg_color.val[c] += src_facade.at<cv::Vec3b>(i, j)[c];
 				}
 			}
 		}
 		fi.bg_color.resize(3);
 		for (int i = 0; i < 3; i++) {
-			avg_color.val[i] = avg_color.val[i] / (src.size().height * src.size().width);
+			avg_color.val[i] = avg_color.val[i] / (src_facade.size().height * src_facade.size().width);
 			fi.bg_color[i] = avg_color.val[i];
 		}
 		if (!broof && bDebug) {
-			cv::imwrite(mi.invalidfacadesFolder + "/" + img_filename, src);
+			cv::imwrite(mi.invalidfacadesFolder + "/" + img_filename, src_facade);
 		}
 		return false;
 	}
@@ -466,12 +459,11 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 		std::cout << "targetSize is " << targetSize << std::endl;
 	}
 	fi.valid = true;
-	cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 	// choose the best chip
 	std::vector<cv::Mat> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	cv::Mat croppedImage = cropped_chips[choose_best_chip(cropped_chips, mi, bDebug, img_filename)];// use the best chip to pass through those testings
 	// segmentation
-	apply_segmentation_model(croppedImage, chip_seg, mi, true, img_filename);
+	apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
@@ -754,7 +746,7 @@ std::vector<double> compute_chip_info(cv::Mat chip, ModelInfo& mi, bool bDebug, 
 
 	int best_class = -1;
 	// Deserialize the ScriptModule from a file using torch::jit::load().
-	torch::Tensor out_tensor = classifier_module->forward(inputs).toTensor();
+	torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 	//std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
 	double best_score = 0;
@@ -903,7 +895,7 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 	}
 	// run three times
 	for (int i = 0; i < run_times; i++) {
-		torch::Tensor out_tensor = seg_module->forward(inputs).toTensor();
+		torch::Tensor out_tensor = mi.seg_module->forward(inputs).toTensor();
 		out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
 		out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
 		//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
@@ -1037,7 +1029,7 @@ std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool
 	if(true)
 	{
 		// Deserialize the ScriptModule from a file using torch::jit::load().
-		torch::Tensor out_tensor = classifier_module->forward(inputs).toTensor();
+		torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
 		//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
 
 		torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
@@ -1061,12 +1053,10 @@ std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool
 			best_class = best_class - 1;
 	}
 	// choose conresponding estimation DNN
-	// path of DN model
-	std::string model_name = mi.grammars[best_class - 1].model_path;
 	// number of paras
 	int num_paras = mi.grammars[best_class - 1].number_paras;
 
-	torch::Tensor out_tensor_grammar = grammar_models[best_class - 1]->forward(inputs).toTensor();
+	torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
 	std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
 	std::vector<double> paras;
 	for (int i = 0; i < num_paras; i++) {
