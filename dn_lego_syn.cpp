@@ -4,6 +4,8 @@
 #include "dn_lego_eval.h"
 #include "optGrammarParas.h"
 
+void test_rejection_model(std::string images_path, ModelInfo& mi);
+
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
@@ -13,6 +15,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	//test_rejection_model("../data/D4/good2bad", mi);
+	//return 0;
 	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
 	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
@@ -42,6 +46,49 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void test_rejection_model(std::string images_path, ModelInfo& mi) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = images_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		// prepare inputs
+		cv::Mat scale_img;
+		cv::resize(src_img, scale_img, cv::Size(224, 224));
+		cv::Mat dnn_img_rgb;
+		cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+		img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+		img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+		torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+
+		torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+
+		double best_score = 0;
+		int best_class = -1;
+		for (int i = 0; i < 2; i++) {
+			double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+			if (tmp > best_score) {
+				best_score = tmp;
+				best_class = i;
+			}
+		}
+		if (true) {
+			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
+			std::cout << img_name << ": "<<confidences_tensor.slice(1, 0, 2) << std::endl;
+			std::cout << "Reject class is " << best_class << std::endl;
+		}
+	}
 }
 
 void readMetajson(std::string metajson, FacadeInfo& fi) {
@@ -342,6 +389,12 @@ int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> 
 }
 
 int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug) {
+	// if facades are too small threshold is 3m
+	if (facadeSize[0] < 6 || facadeSize[1] < 6)
+		return 0;
+	// if the images are too small threshold is 25 by 25
+	if (src_img.size().height < 25 || src_img.size().width < 25)
+		return 0;
 	// prepare inputs
 	cv::Mat scale_img;
 	cv::resize(src_img, scale_img, cv::Size(defaultImgSize[0], defaultImgSize[1]));
