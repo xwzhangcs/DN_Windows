@@ -15,7 +15,7 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	//test_rejection_model("../data/D4/good2bad", mi);
+	//test_rejection_model("../data/D4/facades", mi);
 	//return 0;
 	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
@@ -57,7 +57,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
 		// prepare inputs
 		cv::Mat scale_img;
-		cv::resize(src_img, scale_img, cv::Size(224, 224));
+		cv::resize(src_img, scale_img, cv::Size(224, 224)); 
 		cv::Mat dnn_img_rgb;
 		cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
 		cv::Mat img_float;
@@ -82,6 +82,12 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 				best_score = tmp;
 				best_class = i;
 			}
+		}
+		if (best_score > 0.96) {
+			cv::imwrite("../data/D4/A/" + images[i], src_img);
+		}
+		else {
+			cv::imwrite("../data/D4/B/" + images[i], src_img);
 		}
 		if (true) {
 			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
@@ -433,7 +439,7 @@ int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::
 		std::cout << confidences_tensor.slice(1, 0, 2) << std::endl;
 		std::cout << "Reject class is " << best_class << std::endl;
 	}
-	if (best_class == 1) // bad facades
+	if (best_class == 1 || best_score < 0.96) // bad facades
 		return 0;
 	else {
 		int type = 0;
