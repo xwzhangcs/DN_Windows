@@ -394,7 +394,13 @@ int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> 
 	return type;
 }
 
-int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug) {
+int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
+	// size of chip
+	std::vector<double> facadeSize = fi.facadeSize;
+	// size of nn image size
+	std::vector<double> defaultImgSize = mi.defaultSize;
+	// size of ideal chip size
+	std::vector<double> targetSize = mi.targetChipSize;
 	// if facades are too small threshold is 3m
 	if (facadeSize[0] < 6 || facadeSize[1] < 6)
 		return 0;
@@ -442,6 +448,7 @@ int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::
 	if (best_class == 1 || best_score < 0.96) // bad facades
 		return 0;
 	else {
+		fi.good_conf = best_score;
 		int type = 0;
 		if (facadeSize[0] < targetSize[0] && facadeSize[1] < targetSize[1]) {
 			type = 1;
@@ -485,7 +492,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 	// if it's not a roof
 	int type = 0;
 	if(!broof)
-		type = reject(src_facade, mi, facadeSize, targetSize, mi.defaultSize, mi.debug);
+		type = reject(src_facade, fi, mi, mi.debug);
 	if (type == 0) {
 		fi.valid = false;
 		// compute avg color

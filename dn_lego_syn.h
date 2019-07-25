@@ -19,6 +19,7 @@ struct FacadeInfo {
 	bool roof;                  // Whether facade is a roof 
 	float score;                // Score of the facade image 
 	bool valid;                 // Whether parameters are valid 
+	float good_conf;			// confidence value for the good facade
 	int grammar;                // Procedural grammar to use 
 	std::vector<double> conf;  // Grammar confidence values
 	std::vector<double> chip_size;// Width, height of selected chip (rUTM) 
@@ -74,7 +75,7 @@ struct ModelInfo {
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
 int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
-int reject(cv::Mat src_img, ModelInfo& mi, std::vector<double> facadeSize, std::vector<double> targetSize, std::vector<double> defaultImgSize, bool bDebug);
+int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug);
 void readMetajson(std::string metajson, FacadeInfo& fi);
 void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);
