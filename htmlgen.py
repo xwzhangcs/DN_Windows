@@ -56,7 +56,7 @@ def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_di
 	html_file += "    <tr>\n"
 	html_file += "      <th>Image.</th>\n"
 	html_file += "      <th>Real Facade.</th>\n"
-	html_file += "      <th>Facade Seg.</th>\n"
+	#html_file += "      <th>Facade Seg.</th>\n"
 	html_file += "      <th>Chip.</th>\n"
 	# html_file += "      <th>Chip histeq.</th>\n"
 	html_file += "      <th>Chip Seg.</th>\n"
@@ -70,7 +70,7 @@ def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_di
 	#df_conf = pd.read_csv(confidence_file)
 	for i in range(len(facades)):
 		facade_file = facades_dir + '/' + facades[i]
-		facadeseg_file = facadeseg_dir + '/' + facades[i]
+		#facadeseg_file = facadeseg_dir + '/' + facades[i]
 		chip_file = chips_dir + '/' + facades[i]
 		# chiphist_file = chiphist_dir + '/' + facades[i]
 		seg_file = segs_dir + '/' + facades[i]
@@ -81,7 +81,7 @@ def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_di
 		html_file += "    <tr>\n"
 		html_file += "      <td>" + facades[i] + "</td>\n"
 		html_file += "      <td><a href=\"" + facade_file + "\"><img src=\"" + facade_file + "\"/></a></td>\n"
-		html_file += "      <td><a href=\"" + facadeseg_file + "\"><img src=\"" + facadeseg_file + "\"/></a></td>\n"
+		#html_file += "      <td><a href=\"" + facadeseg_file + "\"><img src=\"" + facadeseg_file + "\"/></a></td>\n"
 		# html_file += "      <td>" + str(df_score.loc[df_score['image'] == facades[i]].iloc[0, 1]) + "</td>\n"
 		html_file += "      <td><a href=\"" + chip_file + "\"><img src=\"" + chip_file + "\"/></a></td>\n"
 		# html_file += "      <td><a href=\"" + chiphist_file + "\"><img src=\"" + chiphist_file + "\"/></a></td>\n"

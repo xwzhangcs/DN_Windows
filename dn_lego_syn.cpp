@@ -530,7 +530,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
-	//adjust boundaries
+	apply_segmentation_model(cropped_chips[best_chip_id].src_image.clone(), cropped_chips[best_chip_id].seg_image, mi, bDebug, img_filename);
 	std::vector<int> boundaries = adjust_chip(cropped_chips[best_chip_id].seg_image.clone());
 	chip_seg = cropped_chips[best_chip_id].seg_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
@@ -601,21 +601,19 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 		}*/
 		std::cout << "Facade type is " << type << std::endl;
 		cv::imwrite(mi.facadesFolder + "/" + img_filename, src_facade);
-		cv::imwrite(mi.facadesSegFolder + "/" + img_filename, facade_seg);
 		cv::imwrite(mi.chipsFolder + "/" + img_filename, croppedImage);
 		cv::imwrite(mi.segsFolder + "/" + img_filename, chip_seg);
 	}
 	return true;
 }
 
-std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
+std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
 	std::vector<ChipInfo> cropped_chips;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
 	if (type == 1) {
 		ChipInfo chip;
 		chip.src_image = src_facade;
-		chip.seg_image = facade_seg;
 		chip.x = 0;
 		chip.y = 0;
 		chip.width = src_facade.size().width;
@@ -632,7 +630,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 			// crop target size
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = src_facade.size().width * start_width_ratio;
 			chip.y = 0;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -648,7 +645,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));;
-				chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));;
 				chip.x = src_facade.size().width * start_width_ratio;
 				chip.y = 0;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -668,7 +664,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 			double start_height_ratio = (1 - target_ratio_height) * 0.5;
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = 0;
 			chip.y = src_facade.size().height * start_height_ratio;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -683,7 +678,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-				chip.seg_image = facade_seg(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 				chip.x = 0;
 				chip.y = src_facade.size().height * start_height_ratio;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -706,7 +700,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 			double start_height_ratio = (1 - target_ratio_height) * 0.5;
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = src_facade.size().width * start_width_ratio;
 			chip.y = src_facade.size().height * start_height_ratio;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -722,7 +715,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-				chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 				chip.x = src_facade.size().width * start_width_ratio;
 				chip.y = src_facade.size().height * start_height_ratio;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -741,7 +733,6 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-				chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 				chip.x = src_facade.size().width * start_width_ratio;
 				chip.y = src_facade.size().height * start_height_ratio;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -758,14 +749,13 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, cv::Mat facade_seg
 	return cropped_chips;
 }
 
-std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
+std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
 	std::vector<ChipInfo> cropped_chips;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
 	if (type == 1) {
 		ChipInfo chip;
 		chip.src_image = src_facade;
-		chip.seg_image = facade_seg;
 		chip.x = 0;
 		chip.y = 0;
 		chip.width = src_facade.size().width;
@@ -782,7 +772,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 			// crop target size
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = src_facade.size().width * start_width_ratio;
 			chip.y = 0;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -798,7 +787,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 																   // get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-				chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 				chip.x = src_facade.size().width * start_width_ratio;
 				chip.y = 0;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -818,7 +806,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 			double start_height_ratio = (1 - target_ratio_height);
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = 0;
 			chip.y = src_facade.size().height * start_height_ratio;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -838,7 +825,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 			double start_height_ratio = (1 - target_ratio_height);
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = src_facade.size().width * start_width_ratio;
 			chip.y = src_facade.size().height * start_height_ratio;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -854,7 +840,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-				chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 				chip.x = src_facade.size().width * start_width_ratio;
 				chip.y = src_facade.size().height * start_height_ratio;
 				chip.width = src_facade.size().width * target_ratio_width;
@@ -871,7 +856,6 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 			double start_width_ratio = (1 - target_ratio_width) * 0.5;
 			ChipInfo chip;
 			chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.seg_image = facade_seg(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
 			chip.x = src_facade.size().width * start_width_ratio;
 			chip.y = src_facade.size().height * start_height_ratio;
 			chip.width = src_facade.size().width * target_ratio_width;
@@ -887,6 +871,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, cv::Mat facade_seg, i
 
 std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	std::vector<double> chip_info;
+	apply_segmentation_model(chip.src_image.clone(), chip.seg_image, mi, false, img_filename);
 	//adjust boundaries
 	std::vector<int> boundaries = adjust_chip(chip.seg_image.clone());
 	cv::Mat chip_seg = chip.seg_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
