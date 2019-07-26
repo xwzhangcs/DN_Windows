@@ -17,7 +17,7 @@ from skimage.measure import compare_ssim as ssim
 from skimage import io
 
 
-def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, html_file_name):
+def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, html_file_name):
 
 	# Create the html file
 	html_file = "<html>\n"
@@ -56,10 +56,10 @@ def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, 
 	html_file += "    <tr>\n"
 	html_file += "      <th>Image.</th>\n"
 	html_file += "      <th>Real Facade.</th>\n"
-	# html_file += "      <th>Facade histeq.</th>\n"
+	html_file += "      <th>Facade Seg.</th>\n"
 	html_file += "      <th>Chip.</th>\n"
 	# html_file += "      <th>Chip histeq.</th>\n"
-	html_file += "      <th>Segmented.</th>\n"
+	html_file += "      <th>Chip Seg.</th>\n"
 	html_file += "      <th>Dilate-processed.</th>\n"
 	html_file += "      <th>Align-processed.</th>\n"
 	html_file += "      <th>DNN In.</th>\n"
@@ -70,7 +70,7 @@ def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, 
 	#df_conf = pd.read_csv(confidence_file)
 	for i in range(len(facades)):
 		facade_file = facades_dir + '/' + facades[i]
-		# facadehist_file = facadehist_dir + '/' + facades[i]
+		facadeseg_file = facadeseg_dir + '/' + facades[i]
 		chip_file = chips_dir + '/' + facades[i]
 		# chiphist_file = chiphist_dir + '/' + facades[i]
 		seg_file = segs_dir + '/' + facades[i]
@@ -81,7 +81,7 @@ def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, 
 		html_file += "    <tr>\n"
 		html_file += "      <td>" + facades[i] + "</td>\n"
 		html_file += "      <td><a href=\"" + facade_file + "\"><img src=\"" + facade_file + "\"/></a></td>\n"
-		# html_file += "      <td><a href=\"" + facadehist_file + "\"><img src=\"" + facadehist_file + "\"/></a></td>\n"
+		html_file += "      <td><a href=\"" + facadeseg_file + "\"><img src=\"" + facadeseg_file + "\"/></a></td>\n"
 		# html_file += "      <td>" + str(df_score.loc[df_score['image'] == facades[i]].iloc[0, 1]) + "</td>\n"
 		html_file += "      <td><a href=\"" + chip_file + "\"><img src=\"" + chip_file + "\"/></a></td>\n"
 		# html_file += "      <td><a href=\"" + chiphist_file + "\"><img src=\"" + chiphist_file + "\"/></a></td>\n"
@@ -104,7 +104,7 @@ def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("facades_dir", help="path to input image folder (e.g., input_data)")
-	# parser.add_argument("facadehist_dir", help="path to input image folder (e.g., input_data)")
+	parser.add_argument("facadeseg_dir", help="path to input image folder (e.g., input_data)")
 	# parser.add_argument("score_file", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("chips_dir", help="path to input image folder (e.g., input_data)")
 	# parser.add_argument("chiphist_dir", help="path to input image folder (e.g., input_data)")
@@ -118,4 +118,4 @@ if __name__ == "__main__":
 	parser.add_argument("html_file_name", help="path to output html filename")
 	args = parser.parse_args()
 
-	main(args.facades_dir, args.chips_dir, args.segs_dir, args.dilates_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.html_file_name)
+	main(args.facades_dir, args.facadeseg_dir, args.chips_dir, args.segs_dir, args.dilates_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.html_file_name)

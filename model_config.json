@@ -56,7 +56,7 @@
 	},
 	"facadesFolder":"../facades",
 	"invalidfacadesFolder":"../invalid_facades",
-	"facadesHisteqFolder":"../facadeshist",
+	"facadesSegFolder":"../facadesseg",
 	"chipsFolder":"../chips",
 	"chipsFolderHisteq":"../chipshist",
 	"segsFolder":"../segs",
@@ -69,7 +69,7 @@
 	"defaultSize":[224, 224],
 	"paddingSize":[5, 5],
 	"segImageSize":[256, 256],
-	"targetChipSize":[20.0, 20.0],
+	"targetChipSize":[30.0, 30.0],
 	"reject_model":"../reject_model_classifier.pt",
 	"seg_model":"../seg_model.pt"
 }
