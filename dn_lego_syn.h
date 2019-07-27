@@ -83,6 +83,8 @@ struct ChipInfo {
 	int width; // Rect width
 	int height; // Rect height
 	double conf_value; // confidence value for the chip
+	std::vector<int> spacing_x; // find horizontal spacing
+	std::vector<int> spacing_y; // find vertical spacing
 };
 
 /**** helper functions *****/
@@ -99,7 +101,7 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 std::vector<int> adjust_chip(cv::Mat chip);
 int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug, std::string img_filename);
-std::vector<int> find_spacing(cv::Mat src_img, bool bDebug);
+void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &space_y, bool bDebug);
 
 /**** steps *****/
 bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo& chip, bool bMultipleChips, bool bDebug, std::string img_filename);

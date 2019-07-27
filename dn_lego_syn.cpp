@@ -14,9 +14,11 @@ int main(int argc, const char* argv[]) {
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
-	readModeljson(argv[3], mi);
-	//test_rejection_model("../data/D4/facades", mi);
-	//return 0;
+	//readModeljson(argv[3], mi);
+	cv::Mat src = cv::imread("../segs/0001_0097.png", CV_LOAD_IMAGE_UNCHANGED);
+	std::vector<int> spacing_x, spacing_y;
+	find_spacing(src, spacing_x, spacing_y, true);
+	return 0;
 	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
 	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
@@ -1082,6 +1084,69 @@ std::vector<int> adjust_chip(cv::Mat chip) {
 	boundaries[2] = pos_left;
 	boundaries[3] = pos_right;
 	return boundaries;
+}
+
+void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &space_y, bool bDebug) {
+	if (src_img.channels() == 4) {
+		space_x.clear();
+		space_y.clear();
+		return;
+	}
+	// horizontal 
+	bool bSpacing_pre = false;
+	bool bSpacing_curr = false;
+	for (int i = 0; i < src_img.size().width; i++) {
+		bSpacing_curr = true;
+		for (int j = 0; j < src_img.size().height; j++) {
+			//noise
+			if (src_img.channels() == 1) {
+				if ((int)src_img.at<uchar>(j, i) == 0) {
+					bSpacing_curr = false;
+					break;
+				}
+			}
+			else {
+				if (src_img.at<cv::Vec3b>(j, i)[0] == 0 && src_img.at<cv::Vec3b>(j, i)[1] == 0 && src_img.at<cv::Vec3b>(j, i)[1] == 0) {
+					bSpacing_curr = false;
+					break;
+				}
+			}
+		}
+		if (bSpacing_pre != bSpacing_curr) {
+			space_x.push_back(i);
+		}
+		bSpacing_pre = bSpacing_curr;
+	}
+
+	bSpacing_pre = false;
+	bSpacing_curr = false;
+	int spacing_y = -1;
+	for (int i = 0; i < src_img.size().height; i++) {
+		bSpacing_curr = true;
+		for (int j = 0; j < src_img.size().width; j++) {
+			if (src_img.channels() == 1) {
+				if ((int)src_img.at<uchar>(i, j) == 0) {
+					bSpacing_curr = false;
+					break;
+				}
+			}
+			else {
+				if (src_img.at<cv::Vec3b>(i, j)[0] == 0 && src_img.at<cv::Vec3b>(i, j)[1] == 0 && src_img.at<cv::Vec3b>(i, j)[1] == 0) {
+					bSpacing_curr = false;
+					break;
+				}
+			}
+		}
+		if (bSpacing_pre != bSpacing_curr) {
+			space_y.push_back(i);
+		}
+		bSpacing_pre = bSpacing_curr;
+	}
+	if (bDebug) {
+		std::cout << "space_x is " << space_x << std::endl;
+		std::cout << "space_y is " << space_y << std::endl;
+	}
+	return;
 }
 
 void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInfo& mi, bool bDebug, std::string img_filename) {
