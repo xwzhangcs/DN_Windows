@@ -30,16 +30,16 @@ int main(int argc, const char* argv[]) {
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
-			cv::Mat chip_seg;
-			bool bvalid = chipping(fi, mi, chip_seg, true, mi.debug, img_filename);
+			ChipInfo chip;
+			bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
 			if (bvalid) {
 				cv::Mat dnn_img;
-				process_chip(chip_seg, dnn_img, mi, mi.debug, img_filename);
-				std::vector<double> predictions = feedDnn(dnn_img, fi, mi, mi.debug, img_filename);
+				process_chip(chip, mi, mi.debug, img_filename);
+				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
 					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
 					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
-					synthesis(predictions, chip_seg.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
+					synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
 				}
 			}
 			//writeMetajson(metajson, fi);
@@ -94,6 +94,49 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 			std::cout << img_name << ": "<<confidences_tensor.slice(1, 0, 2) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
+	}
+}
+
+double get_image_quality_score(cv::Mat src_img, ModelInfo& mi) {
+	// size of nn image size
+	std::vector<double> defaultImgSize = mi.defaultSize;
+	// prepare inputs
+	cv::Mat scale_img;
+	cv::resize(src_img, scale_img, cv::Size(defaultImgSize[0], defaultImgSize[1]));
+	cv::Mat dnn_img_rgb;
+	cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+	cv::Mat img_float;
+	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+	img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+	img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+	img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(img_tensor);
+	// reject model classifier
+	// Deserialize the ScriptModule from a file using torch::jit::load().
+	//std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
+	//reject_classifier_module->to(at::kCUDA);
+	//assert(reject_classifier_module != nullptr);
+	torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+
+	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+
+	double best_score = 0;
+	int best_class = -1;
+	for (int i = 0; i < 2; i++) {
+		double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+		if (tmp > best_score) {
+			best_score = tmp;
+			best_class = i;
+		}
+	}
+	if (best_class == 1)
+		return 0;
+	else {
+		return best_score;
 	}
 }
 
@@ -470,7 +513,7 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 	}
 }
 
-bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleChips, bool bDebug, std::string img_filename) {
+bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips, bool bDebug, std::string img_filename) {
 	// size of chip
 	std::vector<double> facadeSize = fi.facadeSize;
 	// roof 
@@ -530,10 +573,12 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
-	apply_segmentation_model(cropped_chips[best_chip_id].src_image.clone(), cropped_chips[best_chip_id].seg_image, mi, bDebug, img_filename);
-	std::vector<int> boundaries = adjust_chip(cropped_chips[best_chip_id].seg_image.clone());
-	chip_seg = cropped_chips[best_chip_id].seg_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
-	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
+	cv::Mat chip_seg;
+	apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
+	std::vector<int> boundaries = adjust_chip(chip_seg.clone());
+	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
@@ -594,21 +639,30 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleCh
 		fi.win_color[i] = win_avg_color.val[i];
 		fi.bg_color[i] = bg_avg_color.val[i];
 	}
-
+	// copy info to the chip
+	chip.src_image = croppedImage.clone();
+	chip.seg_image = chip_seg.clone();
+	chip.x = cropped_chips[best_chip_id].x + boundaries[2];
+	chip.y = cropped_chips[best_chip_id].y + boundaries[0];
+	chip.width = boundaries[3] - boundaries[2] + 1;
+	chip.height = boundaries[1] - boundaries[0] + 1;
 	if (bDebug) {
 		/*for (int i = 0; i < cropped_chips.size(); i++) {
 			cv::imwrite("../data/confidences/" + std::to_string(i) + '_' + img_filename, cropped_chips[i]);
 		}*/
 		std::cout << "Facade type is " << type << std::endl;
 		cv::imwrite(mi.facadesFolder + "/" + img_filename, src_facade);
-		cv::imwrite(mi.chipsFolder + "/" + img_filename, croppedImage);
-		cv::imwrite(mi.segsFolder + "/" + img_filename, chip_seg);
+		cv::imwrite(mi.chipsFolder + "/" + img_filename, chip.src_image);
+		cv::imwrite(mi.segsFolder + "/" + img_filename, chip.seg_image);
 	}
 	return true;
 }
 
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
 	std::vector<ChipInfo> cropped_chips;
+	double ratio_upper = 0.9;
+	double ratio_lower = 0.1;
+	double ratio_step = 0.1;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
 	if (type == 1) {
@@ -639,9 +693,9 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		else {
 			// push back multiple chips
 			int index = 0;
-			double start_width_ratio = index * 0.1; // not too left
+			double start_width_ratio = index * ratio_lower; // not too left
 			std::vector<double> confidences;
-			while (start_width_ratio + target_ratio_width < 0.9) { // not too right
+			while (start_width_ratio + target_ratio_width < ratio_upper) { // not too right
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));;
@@ -651,7 +705,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_width_ratio = index * 0.1;
+				start_width_ratio = index * ratio_step;
 			}
 		}
 	}
@@ -673,8 +727,8 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		else {
 			// push back multiple chips
 			int index = 0;
-			double start_height_ratio = index * 0.1;
-			while (start_height_ratio + target_ratio_height < 0.9) {
+			double start_height_ratio = index * ratio_lower;
+			while (start_height_ratio + target_ratio_height < ratio_upper) {
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
@@ -684,7 +738,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_height_ratio = index * 0.1;
+				start_height_ratio = index * ratio_step;
 			}
 		}
 	}
@@ -709,9 +763,9 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		else if (bLonger_width) {
 			// check multiple chips and choose the one that has the highest confidence value
 			int index = 0;
-			double start_width_ratio = index * 0.1;
+			double start_width_ratio = index * ratio_lower;
 			double start_height_ratio = (1 - target_ratio_height) * 0.5;
-			while (start_width_ratio + target_ratio_width < 0.9) {
+			while (start_width_ratio + target_ratio_width < ratio_upper) {
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
@@ -721,15 +775,15 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_width_ratio = index * 0.1;
+				start_width_ratio = index * ratio_step;
 			}
 		}
 		else {
 			// check multiple chips and choose the one that has the highest confidence value
 			int index = 0;
-			double start_height_ratio = index * 0.1;
+			double start_height_ratio = index * ratio_lower;
 			double start_width_ratio = (1 - target_ratio_width) * 0.5;
-			while (start_height_ratio + target_ratio_height < 0.9) {
+			while (start_height_ratio + target_ratio_height < ratio_upper) {
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
@@ -739,7 +793,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_height_ratio = index * 0.1;
+				start_height_ratio = index * ratio_step;
 			}
 		}
 	}
@@ -750,6 +804,9 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 }
 
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
+	double ratio_upper = 0.9;
+	double ratio_lower = 0.1;
+	double ratio_step = 0.1;
 	std::vector<ChipInfo> cropped_chips;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
@@ -781,9 +838,9 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		else {
 			// push back multiple chips
 			int index = 0;
-			double start_width_ratio = index * 0.1; // not too left
+			double start_width_ratio = index * ratio_lower; // not too left
 			std::vector<double> confidences;
-			while (start_width_ratio + target_ratio_width < 0.9) { // not too right
+			while (start_width_ratio + target_ratio_width < ratio_upper) { // not too right
 																   // get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, 0, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
@@ -793,7 +850,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_width_ratio = index * 0.1;
+				start_width_ratio = index * ratio_step;
 			}
 		}
 	}
@@ -834,9 +891,9 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		else if (bLonger_width) {
 			// check multiple chips and choose the one that has the highest confidence value
 			int index = 0;
-			double start_width_ratio = index * 0.1;
+			double start_width_ratio = index * ratio_lower;
 			double start_height_ratio = (1 - target_ratio_height);
-			while (start_width_ratio + target_ratio_width < 0.9) {
+			while (start_width_ratio + target_ratio_width < ratio_upper) {
 				// get the cropped img
 				ChipInfo chip;
 				chip.src_image = src_facade(cv::Rect(src_facade.size().width * start_width_ratio, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
@@ -846,7 +903,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 				chip.height = src_facade.size().height * target_ratio_height;
 				cropped_chips.push_back(chip);
 				index++;
-				start_width_ratio = index * 0.1;
+				start_width_ratio = index * ratio_step;
 			}
 		}
 		else {
@@ -874,14 +931,13 @@ std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug,
 	apply_segmentation_model(chip.src_image.clone(), chip.seg_image, mi, false, img_filename);
 	//adjust boundaries
 	std::vector<int> boundaries = adjust_chip(chip.seg_image.clone());
-	cv::Mat chip_seg = chip.seg_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
-	cv::Mat chip_src = chip.src_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
-	cv::Mat dnn_img;
-	process_chip(chip_seg, dnn_img, mi, false, img_filename);
+	chip.seg_image = chip.seg_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	chip.src_image = chip.src_image(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	process_chip(chip, mi, false, img_filename);
 	// go to grammar classifier
 	int num_classes = mi.number_grammars;
 	cv::Mat dnn_img_rgb;
-	cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
+	cv::cvtColor(chip.dnnIn_image.clone(), dnn_img_rgb, CV_BGR2RGB);
 	cv::Mat img_float;
 	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
 	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
@@ -910,7 +966,7 @@ std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug,
 	chip_info.push_back(best_score);
 	if (bDebug)
 	{
-		cv::imwrite(img_filename, chip_src);
+		cv::imwrite(img_filename, chip.src_image);
 	}
 	return chip_info;
 }
@@ -925,6 +981,7 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 		for (int i = 0; i < chips.size(); i++) {
 			std::string filename = "../data/chips/" + img_filename.substr(0, img_filename.find(".png")) + "_" +to_string(i) +".png";
 			confidence_values[i] = compute_chip_info(chips[i], mi, bDebug, filename)[0];
+			// try to use reject model to get image quality score
 			if (bDebug) {
 				std::cout << "chip " << i<< " score is " << confidence_values[i] << std::endl;
 			}
@@ -1104,14 +1161,14 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 	}
 }
 
-bool process_chip(cv::Mat chip_seg, cv::Mat& dnn_img, ModelInfo& mi, bool bDebug, std::string img_filename) {
+bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	// default size for NN
 	int width = mi.defaultSize[0] - 2 * mi.paddingSize[0];
 	int height = mi.defaultSize[1] - 2 * mi.paddingSize[1];
 	cv::Scalar bg_color(255, 255, 255); // white back ground
 	cv::Scalar window_color(0, 0, 0); // black for windows
 	cv::Mat scale_img;
-	cv::resize(chip_seg, scale_img, cv::Size(width, height));
+	cv::resize(chip.seg_image, scale_img, cv::Size(width, height));
 	// correct the color
 	for (int i = 0; i < scale_img.size().height; i++) {
 		for (int j = 0; j < scale_img.size().width; j++) {
@@ -1149,24 +1206,25 @@ bool process_chip(cv::Mat chip_seg, cv::Mat& dnn_img, ModelInfo& mi, bool bDebug
 		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
 	}
 	//
-	dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
+	cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
 	for (int i = 1; i< contours.size(); i++)
 	{
 		if (hierarchy[i][3] != 0) continue;
 		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
 	}
+	chip.dnnIn_image = dnn_img;
 	if (bDebug) {
 		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
 		cv::imwrite(mi.alignsFolder + "/" + img_filename, aligned_img);
-		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, dnn_img);
+		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, chip.dnnIn_image);
 	}
 	return true;
 }
 
-std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {
+std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	int num_classes = mi.number_grammars;
 	cv::Mat dnn_img_rgb;
-	cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
+	cv::cvtColor(chip.dnnIn_image.clone(), dnn_img_rgb, CV_BGR2RGB);
 	cv::Mat img_float;
 	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
 	auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);

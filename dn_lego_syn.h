@@ -77,6 +77,7 @@ struct ModelInfo {
 struct ChipInfo {
 	cv::Mat src_image;
 	cv::Mat seg_image;
+	cv::Mat dnnIn_image;
 	int x; // Rect x
 	int y; // Rect y
 	int width; // Rect width
@@ -88,6 +89,7 @@ struct ChipInfo {
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
 int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
 int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug);
+double get_image_quality_score(cv::Mat src_img, ModelInfo& mi);
 void readMetajson(std::string metajson, FacadeInfo& fi);
 void readModeljson(std::string modeljson, ModelInfo& mi);
 void writeMetajson(std::string metajson, FacadeInfo& fi);
@@ -97,13 +99,14 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 std::vector<int> adjust_chip(cv::Mat chip);
 int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug, std::string img_filename);
+std::vector<int> find_spacing(cv::Mat src_img, bool bDebug);
 
 /**** steps *****/
-bool chipping(FacadeInfo& fi, ModelInfo& mi, cv::Mat& chip_seg, bool bMultipleChips, bool bDebug, std::string img_filename);
+bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo& chip, bool bMultipleChips, bool bDebug, std::string img_filename);
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
-bool process_chip(cv::Mat chip_seg, cv::Mat& dnn_img, ModelInfo& mi, bool bDebug, std::string img_filename);
-std::vector<double> feedDnn(cv::Mat dnn_img, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
+bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
+std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
 
 /**** grammar predictions ****/
