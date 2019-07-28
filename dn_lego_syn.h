@@ -82,9 +82,6 @@ struct ChipInfo {
 	int y; // Rect y
 	int width; // Rect width
 	int height; // Rect height
-	double conf_value; // confidence value for the chip
-	std::vector<int> spacing_x; // find horizontal spacing
-	std::vector<int> spacing_y; // find vertical spacing
 };
 
 /**** helper functions *****/

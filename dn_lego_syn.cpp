@@ -14,11 +14,11 @@ int main(int argc, const char* argv[]) {
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
-	//readModeljson(argv[3], mi);
-	cv::Mat src = cv::imread("../segs/0001_0097.png", CV_LOAD_IMAGE_UNCHANGED);
-	std::vector<int> spacing_x, spacing_y;
-	find_spacing(src, spacing_x, spacing_y, true);
-	return 0;
+	readModeljson(argv[3], mi);
+	//cv::Mat src = cv::imread("../segs/0001_0024.png", CV_LOAD_IMAGE_UNCHANGED);
+	//std::vector<int> spacing_x, spacing_y;
+	//find_spacing(src, spacing_x, spacing_y, true);
+	//return 0;
 	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dst_seg;
 	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
@@ -575,12 +575,30 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
+	// --- step 1
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
 	cv::Mat chip_seg;
 	apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
 	std::vector<int> boundaries = adjust_chip(chip_seg.clone());
 	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	// ---- step 2
+	std::vector<int> space_x;
+	std::vector<int> space_y;
+	find_spacing(chip_seg, space_x, space_y, bDebug);
+	int left = 0, right = chip_seg.size().width - 1, top = 0, bot = chip_seg.size().height - 1;
+	if (space_x.size() > 3 && space_y.size() > 3) {
+		if (space_x[0] * 1.0 / chip_seg.size().width < 0.05)
+			left = space_x[1];
+		if (space_x[space_x.size() - 1] * 1.0 / chip_seg.size().width > 0.95)
+			right = space_x[space_x.size() - 2];
+		if (space_y[0] * 1.0 / chip_seg.size().height < 0.05)
+			top = space_y[1];
+		if (space_y[space_y.size() - 1] * 1.0 / chip_seg.size().height > 0.95)
+			bot = space_y[space_y.size() - 2];
+		chip_seg = chip_seg(cv::Rect(left, top, right - left + 1, bot - top + 1));
+		croppedImage = croppedImage(cv::Rect(left, top, right - left + 1, bot - top + 1));
+	}
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
