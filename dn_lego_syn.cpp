@@ -5,8 +5,9 @@
 #include "optGrammarParas.h"
 
 void test_rejection_model(std::string images_path, ModelInfo& mi);
-void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_type);
-void test_classifier_model(std::string images_path, ModelInfo& mi, int model_type);
+void test_segmentation_model(std::string images_path, ModelInfo& mi);
+void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
+void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
 
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
@@ -16,7 +17,11 @@ int main(int argc, const char* argv[]) {
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
-	readModeljson(argv[3], mi);
+	//readModeljson(argv[3], mi);
+	//test_classifier_model("../data/dnnsIn", mi, true);
+	//test_segmentation_model("../data/segs_test", mi);
+	test_overlay_images("D:/LEGO_meeting_summer_2019/0729/output30/data_additional/A/train", "D:/LEGO_meeting_summer_2019/0729/output30/data_additional/B/train", "D:/LEGO_meeting_summer_2019/0729/output30/data_additional/overlay");
+	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -93,7 +98,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 	}
 }
 
-void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_type) {
+void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
 	for (int i = 0; i < images.size(); i++) {
 		std::string img_name = images_path + '/' + images[i];
@@ -106,10 +111,10 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_t
 		cv::Mat scale_img;
 		cv::resize(src_img, scale_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
 		cv::Mat dnn_img_rgb;
-		if (model_type == 0) {
+		if (mi.seg_module_type == 0) {
 			cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
 		}
-		else if (model_type == 1) {
+		else if (mi.seg_module_type == 1) {
 			cv::Mat scale_histeq, hsv_src;
 			cvtColor(scale_img, hsv_src, cv::COLOR_BGR2HSV);
 			std::vector<cv::Mat> bgr;   //destination array
@@ -127,15 +132,18 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_t
 			cv::equalizeHist(bgr[2], bgr[2]);
 			dnn_img_rgb = bgr[2];
 		}
+		if (true) {
+			cv::imwrite("../data/test/seg_src.png", dnn_img_rgb);
+		}
 		cv::Mat img_float;
 		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
 		int channels = 3;
-		if (model_type == 2)
+		if (mi.seg_module_type == 2)
 			channels = 1;
 		auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], channels }).to(torch::kCUDA);
 		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
 		img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
-		if (model_type != 2) {
+		if (mi.seg_module_type != 2) {
 			img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
 			img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
 		}
@@ -153,10 +161,10 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_t
 		// run three times
 		for (int i = 0; i < run_times; i++) {
 			torch::Tensor out_tensor;
-			if (model_type == 0) {
+			if (mi.seg_module_type == 0) {
 				out_tensor = mi.seg_module->forward(inputs).toTensor();
 			}
-			else if (model_type == 1) {
+			else if (mi.seg_module_type == 1) {
 				out_tensor = mi.seg_module_histeq->forward(inputs).toTensor();
 			}
 			else {
@@ -178,10 +186,10 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_t
 						color_mark[i][j] += 1;
 				}
 			}
-			/*if (bDebug) {
+			if (true) {
 			cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
 			cv::imwrite("../data/test/seg_" + to_string(i) + ".png", resultImg);
-			}*/
+			}
 		}
 		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
 		int num_majority = ceil(0.5 * run_times);
@@ -208,13 +216,123 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_t
 			}
 		}
 		std::string output_img_name = "";
-		if(model_type == 0)
+		if(mi.seg_module_type == 0)
 			output_img_name = "../data/segs_normal/" + images[i];
-		else if(model_type == 1)
+		else if(mi.seg_module_type == 1)
 			output_img_name = "../data/segs_histeq/" + images[i];
 		else
 			output_img_name = "../data/segs_pan/" + images[i];
 		cv::imwrite(output_img_name, chip_seg);
+	}
+}
+
+void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	int num_classes = mi.number_grammars;
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = images_path + '/' + images[i];
+		std::cout << "img_name is " << img_name << std::endl;
+		cv::Mat dnn_img_rgb = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (dnn_img_rgb.channels() == 4) {// ensure there're 3 channels
+			cv::cvtColor(dnn_img_rgb, dnn_img_rgb, CV_BGRA2BGR);
+		}
+		
+		cv::cvtColor(dnn_img_rgb, dnn_img_rgb, CV_BGR2RGB);
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+		img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+		img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+
+		int best_class = -1;
+		std::vector<double> confidence_values;
+		confidence_values.resize(num_classes);
+		if (true)
+		{
+			// Deserialize the ScriptModule from a file using torch::jit::load().
+			torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+			//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
+
+			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+			std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
+
+			double best_score = 0;
+			for (int i = 0; i < num_classes; i++) {
+				double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+				confidence_values[i] = tmp;
+				if (tmp > best_score) {
+					best_score = tmp;
+					best_class = i;
+				}
+			}
+			best_class = best_class + 1;
+			std::cout << "DNN class is " << best_class << std::endl;
+		}
+
+		// choose conresponding estimation DNN
+		// number of paras
+		int num_paras = mi.grammars[best_class - 1].number_paras;
+
+		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
+		std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
+		std::vector<double> paras;
+		for (int i = 0; i < num_paras; i++) {
+			paras.push_back(out_tensor_grammar.slice(1, i, i + 1).item<float>());
+		}
+		for (int i = 0; i < num_paras; i++) {
+			if (paras[i] < 0)
+				paras[i] = 0;
+		}
+
+		std::vector<double> predictions;
+		if (best_class == 1) {
+			predictions = grammar1(mi, paras, bDebug);
+		}
+		else if (best_class == 2) {
+			predictions = grammar2(mi, paras, bDebug);
+		}
+		else if (best_class == 3) {
+			predictions = grammar3(mi, paras, bDebug);
+		}
+		else if (best_class == 4) {
+			predictions = grammar4(mi, paras, bDebug);
+		}
+		else if (best_class == 5) {
+			predictions = grammar5(mi, paras, bDebug);
+		}
+		else if (best_class == 6) {
+			predictions = grammar6(mi, paras, bDebug);
+		}
+		else {
+			//do nothing
+			predictions = grammar1(mi, paras, bDebug);
+		}
+		std::cout << "predictions is " << predictions << std::endl;
+	}
+}
+
+void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(image_1_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string image_1 = image_1_path + '/' + images[i];
+		cv::Mat src_1 = cv::imread(image_1, CV_LOAD_IMAGE_UNCHANGED);
+		if(src_1.channels() == 3)
+			cv::cvtColor(src_1, src_1, CV_BGR2BGRA);
+		std::string image_2 = image_2_path + '/' + images[i];
+		cv::Mat src_2 = cv::imread(image_2, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_2.channels() == 3)
+			cv::cvtColor(src_2, src_2, CV_BGR2BGRA);
+		double alpha = 0.7; double beta;
+		beta = (1.0 - alpha);
+		cv::Mat dst;
+		cv::addWeighted(src_1, alpha, src_2, beta, 0.0, dst);
+		cv::imwrite(output_path + '/' + images[i], dst);
 	}
 }
 
@@ -451,26 +569,32 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.reject_classifier_module = torch::jit::load(reject_model);
 	mi.reject_classifier_module->to(at::kCUDA);
 	assert(mi.reject_classifier_module != nullptr);
-	std::string seg_model = util::readStringValue(docModel, "seg_model");
-	// load segmentation model
-	mi.seg_module = torch::jit::load(seg_model);
-	mi.seg_module->to(at::kCUDA);
-	assert(mi.seg_module != nullptr);
-	// load segmentation_pan model
-	std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
-	// load segmentation model
-	mi.seg_module_pan = torch::jit::load(seg_model_pan);
-	mi.seg_module_pan->to(at::kCUDA);
-	assert(mi.seg_module_pan != nullptr);
-	// load segmentation_histeq model
-	std::string seg_model_histeq = util::readStringValue(docModel, "seg_model_histeq");
-	// load segmentation model
-	mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
-	mi.seg_module_histeq->to(at::kCUDA);
-	assert(mi.seg_module_histeq != nullptr);
 	// seg model type
 	mi.seg_module_type = util::readNumber(docModel, "seg_model_type", 0);
 	std::cout << "mi.seg_module_type is " << mi.seg_module_type << std::endl;
+	if (mi.seg_module_type == 1) {
+		// load segmentation_pan model
+		std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
+		// load segmentation model
+		mi.seg_module_pan = torch::jit::load(seg_model_pan);
+		mi.seg_module_pan->to(at::kCUDA);
+		assert(mi.seg_module_pan != nullptr);
+	}
+	else if (mi.seg_module_type == 2) {
+		// load segmentation_histeq model
+		std::string seg_model_histeq = util::readStringValue(docModel, "seg_model_histeq");
+		// load segmentation model
+		mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
+		mi.seg_module_histeq->to(at::kCUDA);
+		assert(mi.seg_module_histeq != nullptr);
+	}
+	else{
+		std::string seg_model = util::readStringValue(docModel, "seg_model");
+		// load segmentation model
+		mi.seg_module = torch::jit::load(seg_model);
+		mi.seg_module->to(at::kCUDA);
+		assert(mi.seg_module != nullptr);
+	}
 	//
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	rapidjson::Value& grammars = docModel["grammars"];
@@ -1783,10 +1907,10 @@ std::vector<double> grammar1(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	// relativeHeight
 	std::pair<double, double> imageRelativeHeight(mi.grammars[0].relativeHeight[0], mi.grammars[0].relativeHeight[1]);
 	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 		img_rows++;
 	int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
-	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 		img_cols++;
 	int img_groups = 1;
 	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
@@ -1822,14 +1946,14 @@ std::vector<double> grammar2(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	// relativeDHeight
 	std::pair<double, double> imageDRelativeHeight(mi.grammars[1].relativeDHeight[0], mi.grammars[1].relativeDHeight[1]);
 	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 		img_rows++;
 	int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
-	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 		img_cols++;
 	int img_groups = 1;
 	int img_doors = paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-	if (paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+	if (paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 		img_doors++;
 	double relative_width = paras[3] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = paras[4] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
@@ -1854,7 +1978,7 @@ std::vector<double> grammar3(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	std::pair<double, double> imageRelativeWidth(mi.grammars[2].relativeWidth[0], mi.grammars[2].relativeWidth[1]);
 	int img_rows = 1;
 	int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
-	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 		img_cols++;
 	int img_groups = 1;
 	double relative_width = paras[1] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
@@ -1881,11 +2005,11 @@ std::vector<double> grammar4(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	std::pair<double, double> imageDRelativeHeight(mi.grammars[3].relativeDHeight[0], mi.grammars[3].relativeDHeight[1]);
 	int img_rows = 1;;
 	int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
-	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+	if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 		img_cols++;
 	int img_groups = 1;
 	int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 		img_doors++;
 	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 	double relative_height = 1.0;
@@ -1909,7 +2033,7 @@ std::vector<double> grammar5(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	// relativeHeight
 	std::pair<double, double> imageRelativeHeight(mi.grammars[4].relativeHeight[0], mi.grammars[4].relativeHeight[1]);
 	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 		img_rows++;
 	int img_cols = 1;
 	int img_groups = 1;
@@ -1936,12 +2060,12 @@ std::vector<double> grammar6(ModelInfo& mi, std::vector<double> paras, bool bDeb
 	// relativeDHeight
 	std::pair<double, double> imageDRelativeHeight(mi.grammars[5].relativeDHeight[0], mi.grammars[5].relativeDHeight[1]);
 	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 		img_rows++;
 	int img_cols = 1;
 	int img_groups = 1;
 	int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+	if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 		img_doors++;
 	double relative_width = 1.0;
 	double relative_height = paras[2] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
