@@ -5,6 +5,8 @@
 #include "optGrammarParas.h"
 
 void test_rejection_model(std::string images_path, ModelInfo& mi);
+void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_type);
+void test_classifier_model(std::string images_path, ModelInfo& mi, int model_type);
 
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
@@ -15,14 +17,6 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	//cv::Mat src = cv::imread("../segs/0001_0024.png", CV_LOAD_IMAGE_UNCHANGED);
-	//std::vector<int> spacing_x, spacing_y;
-	//find_spacing(src, spacing_x, spacing_y, true);
-	//return 0;
-	/*cv::Mat src = cv::imread("../data/test/0010_0009.png", CV_LOAD_IMAGE_UNCHANGED);
-	cv::Mat dst_seg;
-	apply_segmentation_model(src, dst_seg, mi, true, "../data/test/0010_0009_fake.png");
-	return 0;*/
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -96,6 +90,131 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 			std::cout << img_name << ": "<<confidences_tensor.slice(1, 0, 2) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
+	}
+}
+
+void test_segmentation_model(std::string images_path, ModelInfo& mi, int model_type) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = images_path + '/' + images[i];
+		std::cout << "img_name is " << img_name << std::endl;
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		int run_times = 3;
+		// scale to seg size
+		cv::Mat scale_img;
+		cv::resize(src_img, scale_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
+		cv::Mat dnn_img_rgb;
+		if (model_type == 0) {
+			cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		}
+		else if (model_type == 1) {
+			cv::Mat scale_histeq, hsv_src;
+			cvtColor(scale_img, hsv_src, cv::COLOR_BGR2HSV);
+			std::vector<cv::Mat> bgr;   //destination array
+			cv::split(hsv_src, bgr);//split source 
+			cv::equalizeHist(bgr[2], bgr[2]);
+			cv::merge(bgr, scale_histeq);
+			cvtColor(scale_histeq, scale_histeq, cv::COLOR_HSV2BGR);
+			cv::cvtColor(scale_histeq, dnn_img_rgb, CV_BGR2RGB);
+		}
+		else {
+			cv::Mat scale_pan, hsv_src;
+			cvtColor(scale_img, hsv_src, cv::COLOR_BGR2HSV);
+			std::vector<cv::Mat> bgr;   //destination array
+			cv::split(hsv_src, bgr);//split source 
+			cv::equalizeHist(bgr[2], bgr[2]);
+			dnn_img_rgb = bgr[2];
+		}
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		int channels = 3;
+		if (model_type == 2)
+			channels = 1;
+		auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], channels }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
+		if (model_type != 2) {
+			img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+			img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+		}
+
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+		std::vector<std::vector<int>> color_mark;
+		color_mark.resize((int)mi.segImageSize[1]);
+		for (int i = 0; i < color_mark.size(); i++) {
+			color_mark[i].resize((int)mi.segImageSize[0]);
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				color_mark[i][j] = 0;
+			}
+		}
+		// run three times
+		for (int i = 0; i < run_times; i++) {
+			torch::Tensor out_tensor;
+			if (model_type == 0) {
+				out_tensor = mi.seg_module->forward(inputs).toTensor();
+			}
+			else if (model_type == 1) {
+				out_tensor = mi.seg_module_histeq->forward(inputs).toTensor();
+			}
+			else {
+				out_tensor = mi.seg_module_pan->forward(inputs).toTensor();
+			}
+			out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
+			out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
+			//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
+			out_tensor = out_tensor.to(torch::kCPU);
+			cv::Mat resultImg((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+			std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
+			// gray img
+			// correct the color
+			for (int i = 0; i < resultImg.size().height; i++) {
+				for (int j = 0; j < resultImg.size().width; j++) {
+					if (resultImg.at<cv::Vec3b>(i, j)[0] > 160)
+						color_mark[i][j] += 0;
+					else
+						color_mark[i][j] += 1;
+				}
+			}
+			/*if (bDebug) {
+			cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
+			cv::imwrite("../data/test/seg_" + to_string(i) + ".png", resultImg);
+			}*/
+		}
+		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
+		int num_majority = ceil(0.5 * run_times);
+		for (int i = 0; i < color_mark.size(); i++) {
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				if (color_mark[i][j] < num_majority)
+					gray_img.at<uchar>(i, j) = (uchar)0;
+				else
+					gray_img.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		// scale to grammar size
+		cv::Mat chip_seg;
+		cv::resize(gray_img, chip_seg, src_img.size());
+		// correct the color
+		for (int i = 0; i < chip_seg.size().height; i++) {
+			for (int j = 0; j < chip_seg.size().width; j++) {
+				//noise
+				if ((int)chip_seg.at<uchar>(i, j) < 128) {
+					chip_seg.at<uchar>(i, j) = (uchar)0;
+				}
+				else
+					chip_seg.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		std::string output_img_name = "";
+		if(model_type == 0)
+			output_img_name = "../data/segs_normal/" + images[i];
+		else if(model_type == 1)
+			output_img_name = "../data/segs_histeq/" + images[i];
+		else
+			output_img_name = "../data/segs_pan/" + images[i];
+		cv::imwrite(output_img_name, chip_seg);
 	}
 }
 
@@ -337,6 +456,22 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.seg_module = torch::jit::load(seg_model);
 	mi.seg_module->to(at::kCUDA);
 	assert(mi.seg_module != nullptr);
+	// load segmentation_pan model
+	std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
+	// load segmentation model
+	mi.seg_module_pan = torch::jit::load(seg_model_pan);
+	mi.seg_module_pan->to(at::kCUDA);
+	assert(mi.seg_module_pan != nullptr);
+	// load segmentation_histeq model
+	std::string seg_model_histeq = util::readStringValue(docModel, "seg_model_histeq");
+	// load segmentation model
+	mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
+	mi.seg_module_histeq->to(at::kCUDA);
+	assert(mi.seg_module_histeq != nullptr);
+	// seg model type
+	mi.seg_module_type = util::readNumber(docModel, "seg_model_type", 0);
+	std::cout << "mi.seg_module_type is " << mi.seg_module_type << std::endl;
+	//
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	rapidjson::Value& grammars = docModel["grammars"];
 	// classifier
@@ -1173,14 +1308,39 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 	// scale to seg size
 	cv::resize(src_img, src_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
 	cv::Mat dnn_img_rgb;
-	cv::cvtColor(src_img, dnn_img_rgb, CV_BGR2RGB);
+	if (mi.seg_module_type == 0) {
+		cv::cvtColor(src_img, dnn_img_rgb, CV_BGR2RGB);
+	}
+	else if (mi.seg_module_type == 1) {
+		cv::Mat scale_histeq, hsv_src;
+		cvtColor(src_img, hsv_src, cv::COLOR_BGR2HSV);
+		std::vector<cv::Mat> bgr;   //destination array
+		cv::split(hsv_src, bgr);//split source 
+		cv::equalizeHist(bgr[2], bgr[2]);
+		cv::merge(bgr, scale_histeq);
+		cvtColor(scale_histeq, scale_histeq, cv::COLOR_HSV2BGR);
+		cv::cvtColor(scale_histeq, dnn_img_rgb, CV_BGR2RGB);
+	}
+	else {
+		cv::Mat hsv_src;
+		cvtColor(src_img, hsv_src, cv::COLOR_BGR2HSV);
+		std::vector<cv::Mat> bgr;   //destination array
+		cv::split(hsv_src, bgr);//split source 
+		cv::equalizeHist(bgr[2], bgr[2]);
+		dnn_img_rgb = bgr[2];
+	}
 	cv::Mat img_float;
 	dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
-	auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], 3 }).to(torch::kCUDA);
+	int channels = 3;
+	if (mi.seg_module_type == 2)
+		channels = 1;
+	auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], channels }).to(torch::kCUDA);
 	img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
 	img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
-	img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
-	img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+	if (channels == 3) {
+		img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+		img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+	}
 
 	std::vector<torch::jit::IValue> inputs;
 	inputs.push_back(img_tensor);
@@ -1194,7 +1354,16 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 	}
 	// run three times
 	for (int i = 0; i < run_times; i++) {
-		torch::Tensor out_tensor = mi.seg_module->forward(inputs).toTensor();
+		torch::Tensor out_tensor;
+		if (mi.seg_module_type == 0) {
+			out_tensor = mi.seg_module->forward(inputs).toTensor();
+		}
+		else if (mi.seg_module_type == 1) {
+			out_tensor = mi.seg_module_histeq->forward(inputs).toTensor();
+		}
+		else {
+			out_tensor = mi.seg_module_pan->forward(inputs).toTensor();
+		}
 		out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
 		out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
 		//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);

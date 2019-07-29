@@ -71,5 +71,8 @@
 	"segImageSize":[256, 256],
 	"targetChipSize":[30.0, 30.0],
 	"reject_model":"../reject_model_classifier.pt",
-	"seg_model":"../seg_model.pt"
+	"seg_model":"../seg_model.pt",
+	"seg_model_pan":"../seg_model_pan.pt",
+	"seg_model_histeq":"../seg_model_histeq.pt",
+	"seg_model_type":2
 }

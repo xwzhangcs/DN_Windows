@@ -71,6 +71,9 @@ struct ModelInfo {
 	int number_grammars;
 	std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
 	std::shared_ptr<torch::jit::script::Module> seg_module;
+	std::shared_ptr<torch::jit::script::Module> seg_module_pan;
+	std::shared_ptr<torch::jit::script::Module> seg_module_histeq;
+	int seg_module_type;
 };
 
 // Hold chip info
