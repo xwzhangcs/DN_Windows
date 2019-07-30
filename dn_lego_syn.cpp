@@ -8,6 +8,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi);
 void test_segmentation_model(std::string images_path, ModelInfo& mi);
 void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
 void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
+void collect_data();
 
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
@@ -17,10 +18,10 @@ int main(int argc, const char* argv[]) {
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
-	//readModeljson(argv[3], mi);
+	readModeljson(argv[3], mi);
 	//test_classifier_model("../data/dnnsIn", mi, true);
-	//test_segmentation_model("../data/segs_test", mi);
-	test_overlay_images("D:/LEGO_meeting_summer_2019/0729/output30/data_additional/A/train", "D:/LEGO_meeting_summer_2019/0729/output30/data_additional/B/train", "D:/LEGO_meeting_summer_2019/0729/output30/data_additional/overlay");
+	//test_segmentation_model("D:/LEGO_meeting_summer_2019/0729/more_unregular", mi);
+	test_overlay_images("D:/LEGO_meeting_summer_2019/0729/more_unregular/chips", "D:/LEGO_meeting_summer_2019/0729/more_unregular/segs", "D:/LEGO_meeting_summer_2019/0729/more_unregular/overlay");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -47,6 +48,21 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void collect_data() {
+	std::string path = "D:/LEGO_meeting_summer_2019/0729/more_unregular";
+	std::vector<std::string> regions = get_all_files_names_within_folder(path);
+	int index = 0;
+	for (int i = 0; i < regions.size(); i++) {
+		std::vector<std::string> images = get_all_files_names_within_folder(path + "/" + regions[i]);
+		for (int j = 0; j < images.size(); j++) {
+			cv::Mat src_img = cv::imread(path + "/" + regions[i] + "/" + images[j], CV_LOAD_IMAGE_UNCHANGED);
+			cv::resize(src_img, src_img, cv::Size(256, 256));
+			cv::imwrite(path + "/chips/facade_more_" + to_string(index) + ".png", src_img);
+			index++;
+		}
+	}
 }
 
 void test_rejection_model(std::string images_path, ModelInfo& mi) {
@@ -99,9 +115,9 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 }
 
 void test_segmentation_model(std::string images_path, ModelInfo& mi) {
-	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
-	for (int i = 0; i < images.size(); i++) {
-		std::string img_name = images_path + '/' + images[i];
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/chips/");
+	for (int index = 0; index < images.size(); index++) {
+		std::string img_name = images_path + "/chips/" + images[index];
 		std::cout << "img_name is " << img_name << std::endl;
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) // ensure there're 3 channels
@@ -131,9 +147,6 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 			cv::split(hsv_src, bgr);//split source 
 			cv::equalizeHist(bgr[2], bgr[2]);
 			dnn_img_rgb = bgr[2];
-		}
-		if (true) {
-			cv::imwrite("../data/test/seg_src.png", dnn_img_rgb);
 		}
 		cv::Mat img_float;
 		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
@@ -178,19 +191,37 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 			std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
 			// gray img
 			// correct the color
-			for (int i = 0; i < resultImg.size().height; i++) {
-				for (int j = 0; j < resultImg.size().width; j++) {
-					if (resultImg.at<cv::Vec3b>(i, j)[0] > 160)
-						color_mark[i][j] += 0;
+			for (int h = 0; h < resultImg.size().height; h++) {
+				for (int w = 0; w < resultImg.size().width; w++) {
+					if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
+						color_mark[h][w] += 0;
 					else
-						color_mark[i][j] += 1;
+						color_mark[h][w] += 1;
 				}
 			}
-			if (true) {
-			cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
-			cv::imwrite("../data/test/seg_" + to_string(i) + ".png", resultImg);
+			if (false) {
+				cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
+				cv::imwrite(images_path + "/segs/" + images[index], resultImg);
 			}
 		}
+		cv::Mat seg_final_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+		int num_majority = ceil(0.5 * run_times);
+		for (int i = 0; i < color_mark.size(); i++) {
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				if (color_mark[i][j] < num_majority) {
+					seg_final_img.at<cv::Vec3b>(i, j)[0] = 0;
+					seg_final_img.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_final_img.at<cv::Vec3b>(i, j)[2] = 255;
+				}	
+				else {
+					seg_final_img.at<cv::Vec3b>(i, j)[0] = 255;
+					seg_final_img.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_final_img.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+			}
+		}
+		cv::imwrite(images_path + "/segs/" + images[index], seg_final_img);
+		/*
 		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
 		int num_majority = ceil(0.5 * run_times);
 		for (int i = 0; i < color_mark.size(); i++) {
@@ -223,6 +254,7 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		else
 			output_img_name = "../data/segs_pan/" + images[i];
 		cv::imwrite(output_img_name, chip_seg);
+		*/
 	}
 }
 
@@ -1496,12 +1528,12 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 		std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
 		// gray img
 		// correct the color
-		for (int i = 0; i < resultImg.size().height; i++) {
-			for (int j = 0; j < resultImg.size().width; j++) {
-				if (resultImg.at<cv::Vec3b>(i, j)[0] > 160)
-					color_mark[i][j] += 0;
+		for (int h = 0; h < resultImg.size().height; h++) {
+			for (int w = 0; w < resultImg.size().width; w++) {
+				if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
+					color_mark[h][w] += 0;
 				else
-					color_mark[i][j] += 1;
+					color_mark[h][w] += 1;
 			}
 		}
 		/*if (bDebug) {
