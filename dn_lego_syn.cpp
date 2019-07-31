@@ -4,31 +4,31 @@
 #include "dn_lego_eval.h"
 #include "optGrammarParas.h"
 
-void test_rejection_model(std::string images_path, ModelInfo& mi);
-void test_segmentation_model(std::string images_path, ModelInfo& mi);
-void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
-void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
-void collect_data();
-
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/train");
+	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/test");
+	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/val");
+	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/train");
+	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/test");
+	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/val");
+	return 0;
+	//
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	//test_classifier_model("../data/dnnsIn", mi, true);
-	//test_segmentation_model("D:/LEGO_meeting_summer_2019/0729/more_unregular", mi);
-	test_overlay_images("D:/LEGO_meeting_summer_2019/0729/more_unregular/chips", "D:/LEGO_meeting_summer_2019/0729/more_unregular/segs", "D:/LEGO_meeting_summer_2019/0729/more_unregular/overlay");
-	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
+			if (img_filename != "0026_0010.png")
+				continue;
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
@@ -38,6 +38,7 @@ int main(int argc, const char* argv[]) {
 				cv::Mat dnn_img;
 				process_chip(chip, mi, mi.debug, img_filename);
 				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
+				std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
 					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
 					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
@@ -48,21 +49,6 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
-}
-
-void collect_data() {
-	std::string path = "D:/LEGO_meeting_summer_2019/0729/more_unregular";
-	std::vector<std::string> regions = get_all_files_names_within_folder(path);
-	int index = 0;
-	for (int i = 0; i < regions.size(); i++) {
-		std::vector<std::string> images = get_all_files_names_within_folder(path + "/" + regions[i]);
-		for (int j = 0; j < images.size(); j++) {
-			cv::Mat src_img = cv::imread(path + "/" + regions[i] + "/" + images[j], CV_LOAD_IMAGE_UNCHANGED);
-			cv::resize(src_img, src_img, cv::Size(256, 256));
-			cv::imwrite(path + "/chips/facade_more_" + to_string(index) + ".png", src_img);
-			index++;
-		}
-	}
 }
 
 void test_rejection_model(std::string images_path, ModelInfo& mi) {
@@ -115,9 +101,9 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 }
 
 void test_segmentation_model(std::string images_path, ModelInfo& mi) {
-	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/chips/");
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
 	for (int index = 0; index < images.size(); index++) {
-		std::string img_name = images_path + "/chips/" + images[index];
+		std::string img_name = images_path + images[index];
 		std::cout << "img_name is " << img_name << std::endl;
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) // ensure there're 3 channels
@@ -204,7 +190,7 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 				cv::imwrite(images_path + "/segs/" + images[index], resultImg);
 			}
 		}
-		cv::Mat seg_final_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+		/*cv::Mat seg_final_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
 		int num_majority = ceil(0.5 * run_times);
 		for (int i = 0; i < color_mark.size(); i++) {
 			for (int j = 0; j < color_mark[i].size(); j++) {
@@ -219,9 +205,7 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 					seg_final_img.at<cv::Vec3b>(i, j)[2] = 0;
 				}
 			}
-		}
-		cv::imwrite(images_path + "/segs/" + images[index], seg_final_img);
-		/*
+		}*/
 		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
 		int num_majority = ceil(0.5 * run_times);
 		for (int i = 0; i < color_mark.size(); i++) {
@@ -248,13 +232,12 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		}
 		std::string output_img_name = "";
 		if(mi.seg_module_type == 0)
-			output_img_name = "../data/segs_normal/" + images[i];
+			output_img_name = "../data/segs_normal/" + images[index];
 		else if(mi.seg_module_type == 1)
-			output_img_name = "../data/segs_histeq/" + images[i];
+			output_img_name = "../data/segs_histeq/" + images[index];
 		else
-			output_img_name = "../data/segs_pan/" + images[i];
+			output_img_name = "../data/segs_pan/" + images[index];
 		cv::imwrite(output_img_name, chip_seg);
-		*/
 	}
 }
 
@@ -365,6 +348,58 @@ void test_overlay_images(std::string image_1_path, std::string image_2_path, std
 		cv::Mat dst;
 		cv::addWeighted(src_1, alpha, src_2, beta, 0.0, dst);
 		cv::imwrite(output_path + '/' + images[i], dst);
+	}
+}
+
+void collect_roi_images(std::string images_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	cv::Scalar bg_color(255, 0, 0); // white back ground
+	cv::Scalar fg_color(0, 0, 255); // white back ground
+	for (int i = 0; i < images.size(); i++) {
+		std::string image_name = images_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) {// ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		}
+		cv::Mat src_gray(src_img.size(), CV_8UC1);
+		for (int h = 0; h < src_img.size().height; h++) {
+			for (int w = 0; w < src_img.size().width; w++) {
+				if (src_img.at<cv::Vec3b>(h, w)[0] > 160) {
+					src_gray.at<uchar>(h, w) = (uchar)0;
+				}
+				else {
+					src_gray.at<uchar>(h, w) = (uchar)255;
+				}
+			}
+		}
+		// find contours
+		std::vector<std::vector<cv::Point> > contours;
+		std::vector<cv::Vec4i> hierarchy;
+		cv::findContours(src_gray, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+		std::cout << "contours.size() is " << contours.size() << std::endl;
+		std::vector<cv::Rect> boundRect(contours.size());
+		std::vector<int> roi_x_tl;
+		std::vector<int> roi_y_tl;
+		std::vector<int> roi_x_br;
+		std::vector<int> roi_y_br;
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+			roi_x_tl.push_back(boundRect[i].tl().x);
+			roi_y_tl.push_back(boundRect[i].tl().y);
+			roi_x_br.push_back(boundRect[i].br().x);
+			roi_y_br.push_back(boundRect[i].br().y);
+		}
+		//
+		cv::Mat dnn_img = cv::Mat(src_gray.size(), CV_8UC3, bg_color);
+		int min_tl_x = *std::min_element(roi_x_tl.begin(), roi_x_tl.end());
+		int min_tl_y = *std::min_element(roi_y_tl.begin(), roi_y_tl.end());
+		int max_br_x = *std::max_element(roi_x_br.begin(), roi_x_br.end());
+		int max_br_y = *std::max_element(roi_y_br.begin(), roi_y_br.end());
+		cv::rectangle(dnn_img, cv::Point(min_tl_x, min_tl_y), cv::Point(max_br_x, max_br_y), fg_color, -1);
+		cv::imwrite(output_path + "/" + images[i], dnn_img);
+		
 	}
 }
 
@@ -601,9 +636,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.reject_classifier_module = torch::jit::load(reject_model);
 	mi.reject_classifier_module->to(at::kCUDA);
 	assert(mi.reject_classifier_module != nullptr);
-	// seg model type
+	// segmentation model type
 	mi.seg_module_type = util::readNumber(docModel, "seg_model_type", 0);
-	std::cout << "mi.seg_module_type is " << mi.seg_module_type << std::endl;
 	if (mi.seg_module_type == 1) {
 		// load segmentation_pan model
 		std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
@@ -971,8 +1005,8 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
 	std::vector<ChipInfo> cropped_chips;
-	double ratio_upper = 0.9;
-	double ratio_lower = 0.1;
+	double ratio_upper = 0.95;
+	double ratio_lower = 0.05;
 	double ratio_step = 0.1;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
@@ -1003,7 +1037,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		}
 		else {
 			// push back multiple chips
-			int index = 0;
+			int index = 1;
 			double start_width_ratio = index * ratio_lower; // not too left
 			std::vector<double> confidences;
 			while (start_width_ratio + target_ratio_width < ratio_upper) { // not too right
@@ -1037,7 +1071,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		}
 		else {
 			// push back multiple chips
-			int index = 0;
+			int index = 1;
 			double start_height_ratio = index * ratio_lower;
 			while (start_height_ratio + target_ratio_height < ratio_upper) {
 				// get the cropped img
@@ -1073,7 +1107,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		}
 		else if (bLonger_width) {
 			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
+			int index = 1;
 			double start_width_ratio = index * ratio_lower;
 			double start_height_ratio = (1 - target_ratio_height) * 0.5;
 			while (start_width_ratio + target_ratio_width < ratio_upper) {
@@ -1091,7 +1125,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 		}
 		else {
 			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
+			int index = 1;
 			double start_height_ratio = index * ratio_lower;
 			double start_width_ratio = (1 - target_ratio_width) * 0.5;
 			while (start_height_ratio + target_ratio_height < ratio_upper) {
@@ -1115,8 +1149,8 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 }
 
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
-	double ratio_upper = 0.9;
-	double ratio_lower = 0.1;
+	double ratio_upper = 0.95;
+	double ratio_lower = 0.05;
 	double ratio_step = 0.1;
 	std::vector<ChipInfo> cropped_chips;
 	double target_width = targetSize[0];
@@ -1148,7 +1182,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		}
 		else {
 			// push back multiple chips
-			int index = 0;
+			int index = 1;
 			double start_width_ratio = index * ratio_lower; // not too left
 			std::vector<double> confidences;
 			while (start_width_ratio + target_ratio_width < ratio_upper) { // not too right
@@ -1201,7 +1235,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		}
 		else if (bLonger_width) {
 			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
+			int index = 1;
 			double start_width_ratio = index * ratio_lower;
 			double start_height_ratio = (1 - target_ratio_height);
 			while (start_width_ratio + target_ratio_width < ratio_upper) {
@@ -1219,7 +1253,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		}
 		else {
 			// check multiple chips and choose the one that has the highest confidence value
-			int index = 0;
+			int index = 1;
 			double start_height_ratio = (1 - target_ratio_height);
 			double start_width_ratio = (1 - target_ratio_width) * 0.5;
 			ChipInfo chip;

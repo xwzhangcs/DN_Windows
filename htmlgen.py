@@ -17,7 +17,7 @@ from skimage.measure import compare_ssim as ssim
 from skimage import io
 
 
-def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, html_file_name):
+def main(facades_dir, chips_dir, segs_dir, dilates_dir, algins_dir, dnnsIn_dir, dnnsOut_dir, html_file_name):
 
 	# Create the html file
 	html_file = "<html>\n"
@@ -104,7 +104,7 @@ def main(facades_dir, facadeseg_dir, chips_dir, segs_dir, dilates_dir, algins_di
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("facades_dir", help="path to input image folder (e.g., input_data)")
-	parser.add_argument("facadeseg_dir", help="path to input image folder (e.g., input_data)")
+	# parser.add_argument("facadeseg_dir", help="path to input image folder (e.g., input_data)")
 	# parser.add_argument("score_file", help="path to input image folder (e.g., input_data)")
 	parser.add_argument("chips_dir", help="path to input image folder (e.g., input_data)")
 	# parser.add_argument("chiphist_dir", help="path to input image folder (e.g., input_data)")
@@ -118,4 +118,4 @@ if __name__ == "__main__":
 	parser.add_argument("html_file_name", help="path to output html filename")
 	args = parser.parse_args()
 
-	main(args.facades_dir, args.facadeseg_dir, args.chips_dir, args.segs_dir, args.dilates_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.html_file_name)
+	main(args.facades_dir, args.chips_dir, args.segs_dir, args.dilates_dir, args.algins_dir, args.dnnsIn_dir, args.dnnsOut_dir, args.html_file_name)

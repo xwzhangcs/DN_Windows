@@ -87,6 +87,13 @@ struct ChipInfo {
 	int height; // Rect height
 };
 
+/**** test functions *****/
+void test_rejection_model(std::string images_path, ModelInfo& mi);
+void test_segmentation_model(std::string images_path, ModelInfo& mi);
+void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
+void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
+void collect_roi_images(std::string images_path, std::string output_path);
+
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
 int reject(cv::Mat src_img, std::vector<double> facadeSize, std::vector<double> targetSize, double score, bool bDebug);
