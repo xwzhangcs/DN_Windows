@@ -9,26 +9,20 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/train");
-	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/test");
-	collect_roi_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/val");
-	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/train", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/train");
-	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/test", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/test");
-	test_overlay_images("D:/LEGO_meeting_summer_2019/0730/ROI/data_src/B/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/C/val", "D:/LEGO_meeting_summer_2019/0730/ROI/data_src/D/val");
-	return 0;
 	//
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
-			if (img_filename != "0026_0010.png")
-				continue;
+			/*if (img_filename != "0060_0025.png")
+				continue;*/
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
@@ -103,7 +97,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
 	for (int index = 0; index < images.size(); index++) {
-		std::string img_name = images_path + images[index];
+		std::string img_name = images_path + "/" + images[index];
 		std::cout << "img_name is " << img_name << std::endl;
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) // ensure there're 3 channels
@@ -900,6 +894,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
+
 	// --- step 1
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
 	cv::Mat chip_seg;
@@ -907,7 +902,65 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	std::vector<int> boundaries = adjust_chip(chip_seg.clone());
 	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	
 	// ---- step 2
+	// add padding
+	cv::Mat scale_img;
+	cv::resize(chip_seg, scale_img, cv::Size(mi.defaultSize[0], mi.defaultSize[1]));
+	// correct the color
+	for (int i = 0; i < scale_img.size().height; i++) {
+		for (int j = 0; j < scale_img.size().width; j++) {
+			//noise
+			if ((int)scale_img.at<uchar>(i, j) < 128) {
+				scale_img.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				scale_img.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+	int dilation_type = cv::MORPH_RECT;
+	cv::Mat test_dilation;
+	int kernel_size = 3;
+	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+	/// Apply the dilation operation
+	cv::dilate(scale_img, test_dilation, element);
+	cv::resize(test_dilation, test_dilation, chip_seg.size());
+	// correct the color
+	for (int i = 0; i < test_dilation.size().height; i++) {
+		for (int j = 0; j < test_dilation.size().width; j++) {
+			//noise
+			if ((int)test_dilation.at<uchar>(i, j) < 128) {
+				test_dilation.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				test_dilation.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+	int padding_size = mi.paddingSize[0];
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Mat test_img;
+	cv::copyMakeBorder(test_dilation, test_img, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 255, 255));
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(test_img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+	std::vector<float> area_contours(contours.size());
+	std::vector<cv::Rect> boundRect(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		area_contours[i] = cv::contourArea(contours[i]);
+	}
+	std::sort(area_contours.begin(), area_contours.end());
+	float target_contour_area = area_contours[area_contours.size() / 2];
+	for (int i = 0; i < contours.size(); i++)
+	{
+		float area_contour = cv::contourArea(contours[i]);
+		if (area_contour < 0.5 * target_contour_area) {
+			cv::rectangle(test_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), cv::Scalar(255, 255, 255), -1);
+		}
+	}
+	/*
 	std::vector<int> space_x;
 	std::vector<int> space_y;
 	find_spacing(chip_seg, space_x, space_y, bDebug);
@@ -924,6 +977,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 		chip_seg = chip_seg(cv::Rect(left, top, right - left + 1, bot - top + 1));
 		croppedImage = croppedImage(cv::Rect(left, top, right - left + 1, bot - top + 1));
 	}
+	*/
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
@@ -997,8 +1051,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 		}*/
 		std::cout << "Facade type is " << type << std::endl;
 		cv::imwrite(mi.facadesFolder + "/" + img_filename, src_facade);
-		cv::imwrite(mi.chipsFolder + "/" + img_filename, chip.src_image);
-		cv::imwrite(mi.segsFolder + "/" + img_filename, chip.seg_image);
+		cv::imwrite(mi.dilatesFolder + "/" + img_filename, test_img);
 	}
 	return true;
 }
@@ -1007,7 +1060,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 	std::vector<ChipInfo> cropped_chips;
 	double ratio_upper = 0.95;
 	double ratio_lower = 0.05;
-	double ratio_step = 0.1;
+	double ratio_step = 0.05;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
 	if (type == 1) {
@@ -1352,7 +1405,7 @@ std::vector<int> adjust_chip(cv::Mat chip) {
 	}
 	// find the boundary
 	double thre_upper = 1.1; // don't apply here
-	double thre_lower = 0.2;
+	double thre_lower = 0.1;
 	// top 
 	int pos_top = 0;
 	int black_pixels = 0;
@@ -1643,23 +1696,92 @@ bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_fi
 	cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
 
 	std::vector<cv::Rect> boundRect(contours.size());
+	std::vector<std::vector<cv::Rect>> largestRect(contours.size());
+	std::vector<bool> bIntersectionbbox(contours.size());
+	std::vector<float> area_contours(contours.size());
+
 	for (int i = 0; i < contours.size(); i++)
 	{
 		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		area_contours[i] = cv::contourArea(contours[i]);
+		bIntersectionbbox[i] = false;
+	}
+	std::sort(area_contours.begin(), area_contours.end());
+	float target_contour_area = area_contours[area_contours.size() / 2];
+	// find the largest rectangles
+	cv::Mat drawing(aligned_img_padding.size(), CV_8UC3, bg_color);
+	for (int i = 0; i< contours.size(); i++)
+	{
+		if (hierarchy[i][3] != 0) continue;
+		cv::Mat tmp(aligned_img_padding.size(), CV_8UC3, window_color);
+		drawContours(tmp, contours, i, bg_color, -1, 8, hierarchy, 0, cv::Point());
+		cv::Mat tmp_gray;
+		cvtColor(tmp, tmp_gray, cv::COLOR_BGR2GRAY);
+		cv::Rect tmp_rect = findLargestRectangle(tmp_gray);
+		largestRect[i].push_back(tmp_rect);
+		float area_contour = cv::contourArea(contours[i]);
+		float area_rect = 0;
+		area_rect += tmp_rect.width * tmp_rect.height;
+		float ratio = area_rect / area_contour;
+		while (ratio < 0.60) { // find more largest rectangles in the rest area
+							   // clear up the previous rectangles
+			tmp_gray.empty();
+			cv::rectangle(tmp, cv::Point(tmp_rect.tl().x, tmp_rect.tl().y), cv::Point(tmp_rect.br().x, tmp_rect.br().y), window_color, -1);
+			cvtColor(tmp, tmp_gray, cv::COLOR_BGR2GRAY);
+			tmp_rect = findLargestRectangle(tmp_gray);
+			area_rect += tmp_rect.width * tmp_rect.height;
+			if (tmp_rect.width * tmp_rect.height > 100)
+				largestRect[i].push_back(tmp_rect);
+			ratio = area_rect / area_contour;
+		}
+	}
+	// check intersection
+	for (int i = 0; i < contours.size(); i++) {
+		if (hierarchy[i][3] != 0 || bIntersectionbbox[i]) {
+			bIntersectionbbox[i] = true;
+			continue;
+		}
+		for (int j = i + 1; j < contours.size(); j++) {
+			if (findIntersection(boundRect[i], boundRect[j])) {
+				bIntersectionbbox[i] = true;
+				bIntersectionbbox[j] = true;
+				break;
+			}
+		}
 	}
 	//
 	cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
 	for (int i = 1; i< contours.size(); i++)
 	{
 		if (hierarchy[i][3] != 0) continue;
+		// check the validity of the rect
+		//float area_contour = cv::contourArea(contours[i]);
+		//float area_rect = boundRect[i].width * boundRect[i].height;
+		//if (area_contour < 0.5 * target_contour_area) continue;
+		//float ratio = area_contour / area_rect;
+		//if (!bIntersectionbbox[i] /*&& (ratio > 0.60 || area_contour < 160)*/) {
+		//	cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+		//}
+		//else {
+		//	for (int j = 0; j < 1; j++)
+		//		cv::rectangle(dnn_img, cv::Point(largestRect[i][j].tl().x, largestRect[i][j].tl().y), cv::Point(largestRect[i][j].br().x, largestRect[i][j].br().y), window_color, -1);
+		//}
 		cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
 	}
+	chip.dilation_dst = dilation_dst;
+	chip.aligned_img = aligned_img;
 	chip.dnnIn_image = dnn_img;
 	if (bDebug) {
-		cv::imwrite(mi.dilatesFolder + "/" + img_filename, dilation_dst);
-		cv::imwrite(mi.alignsFolder + "/" + img_filename, aligned_img);
+		cv::imwrite(mi.chipsFolder + "/" + img_filename, chip.src_image);
+		cv::imwrite(mi.segsFolder + "/" + img_filename, chip.seg_image);
+		//cv::imwrite(mi.dilatesFolder + "/" + img_filename, chip.dilation_dst);
+		cv::imwrite(mi.alignsFolder + "/" + img_filename, chip.aligned_img);
 		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, chip.dnnIn_image);
 	}
+	return true;
+}
+
+bool post_process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	return true;
 }
 
@@ -1961,6 +2083,89 @@ cv::Mat cleanAlignedImage(cv::Mat src, float threshold) {
 
 	}
 	return result;
+}
+
+// Returns the largest rectangle inscribed within regions of all non-zero pixels
+cv::Rect findLargestRectangle(cv::Mat image) {
+	assert(image.channels() == 1);
+	cv::Mat mask = (image > 0) / 255;
+	mask.convertTo(mask, CV_16S);
+
+	// Get the largest area rectangle under a histogram
+	auto maxHist = [](cv::Mat hist) -> cv::Rect {
+		// Append -1 to both ends
+		cv::copyMakeBorder(hist, hist, 0, 0, 1, 1, cv::BORDER_CONSTANT, cv::Scalar::all(-1));
+		cv::Rect maxRect(-1, -1, 0, 0);
+
+		// Initialize stack to first element
+		std::stack<int> colStack;
+		colStack.push(0);
+
+		// Iterate over columns
+		for (int c = 0; c < hist.cols; c++) {
+			// Ensure stack is only increasing
+			while (hist.at<int16_t>(c) < hist.at<int16_t>(colStack.top())) {
+				// Pop larger element
+				int h = hist.at<int16_t>(colStack.top()); colStack.pop();
+				// Get largest rect at popped height using nearest smaller element on both sides
+				cv::Rect rect(colStack.top(), 0, c - colStack.top() - 1, h);
+				// Update best rect
+				if (rect.area() > maxRect.area())
+					maxRect = rect;
+			}
+			// Push this column
+			colStack.push(c);
+		}
+		return maxRect;
+	};
+
+	cv::Rect maxRect(-1, -1, 0, 0);
+	cv::Mat height = cv::Mat::zeros(1, mask.cols, CV_16SC1);
+	for (int r = 0; r < mask.rows; r++) {
+		// Extract a single row
+		cv::Mat row = mask.row(r);
+		// Get height of unbroken non-zero values per column
+		height = (height + row);
+		height.setTo(0, row == 0);
+
+		// Get largest rectangle from this row up
+		cv::Rect rect = maxHist(height);
+		if (rect.area() > maxRect.area()) {
+			maxRect = rect;
+			maxRect.y = r - maxRect.height + 1;
+		}
+	}
+
+	return maxRect;
+}
+
+bool insideRect(cv::Rect a1, cv::Point p) {
+	bool bresult = false;
+	if (p.x >= a1.tl().x && p.x <= a1.br().x && p.y >= a1.tl().y && p.y <= a1.br().y)
+		bresult = true;
+	return bresult;
+}
+
+bool findIntersection(cv::Rect a1, cv::Rect a2) {
+	// a2 insection with a1 
+	if (insideRect(a1, a2.tl()))
+		return true;
+	if (insideRect(a1, cv::Point(a2.tl().x, a2.br().y)))
+		return true;
+	if (insideRect(a1, a2.br()))
+		return true;
+	if (insideRect(a1, cv::Point(a2.br().x, a2.tl().y)))
+		return true;
+	// a1 insection with a2
+	if (insideRect(a2, a1.tl()))
+		return true;
+	if (insideRect(a2, cv::Point(a1.tl().x, a1.br().y)))
+		return true;
+	if (insideRect(a2, a1.br()))
+		return true;
+	if (insideRect(a2, cv::Point(a1.br().x, a1.tl().y)))
+		return true;
+	return false;
 }
 
 std::vector<double> grammar1(ModelInfo& mi, std::vector<double> paras, bool bDebug) {

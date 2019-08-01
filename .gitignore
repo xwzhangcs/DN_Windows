@@ -32,3 +32,5 @@ confidence.csv
 seg_model.pt
 seg_model_histeq.pt
 seg_model_pan.pt
+seg_model_new.pt
+seg_model_new_aug.pt

@@ -81,6 +81,8 @@ struct ChipInfo {
 	cv::Mat src_image;
 	cv::Mat seg_image;
 	cv::Mat dnnIn_image;
+	cv::Mat dilation_dst;
+	cv::Mat aligned_img;
 	int x; // Rect x
 	int y; // Rect y
 	int width; // Rect width
@@ -109,12 +111,16 @@ std::vector<int> adjust_chip(cv::Mat chip);
 int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &space_y, bool bDebug);
+cv::Rect findLargestRectangle(cv::Mat image);
+bool findIntersection(cv::Rect a1, cv::Rect a2);
+bool insideRect(cv::Rect a1, cv::Point p);
 
 /**** steps *****/
 bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo& chip, bool bMultipleChips, bool bDebug, std::string img_filename);
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
+bool post_process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
 
