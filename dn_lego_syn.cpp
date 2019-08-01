@@ -14,6 +14,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	test_spacing("../data/segs", mi, true);
+	return 0;
 	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -394,6 +396,47 @@ void collect_roi_images(std::string images_path, std::string output_path) {
 		cv::rectangle(dnn_img, cv::Point(min_tl_x, min_tl_y), cv::Point(max_br_x, max_br_y), fg_color, -1);
 		cv::imwrite(output_path + "/" + images[i], dnn_img);
 		
+	}
+}
+
+void test_spacing(std::string images_path, ModelInfo& mi, bool bDebug) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = images_path + '/' + images[i];
+		std::cout << "img_name is " << img_name << std::endl;
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		std::vector<int> separation_x;
+		std::vector<int> separation_y;
+		find_spacing(src_img, separation_x, separation_y, bDebug);
+		if (separation_x.size() > 0) {
+			// compute spacing
+			std::vector<int> space_x;
+			for (int i = 0; i < separation_x.size(); i += 2) {
+				space_x.push_back(separation_x[i + 1] - separation_x[i]);
+			}
+			std::cout << "space_x is " << space_x << std::endl;
+			int max_spacing_x_id =std::max_element(space_x.begin(), space_x.end()) - space_x.begin();
+			double ratio_x = space_x[max_spacing_x_id] * 1.0 / src_img.size().width;
+			std::cout << "ratio_x is " << ratio_x << std::endl;
+			if (ratio_x > 0.24)
+			{
+				if (space_x.size() >= 2) {
+					float average_spacing = accumulate(space_x.begin(), space_x.end(), 0.0) / space_x.size();
+					std::cout << "average_spacing is " << average_spacing << std::endl;
+					if (abs(space_x[max_spacing_x_id] - average_spacing) / src_img.size().width < 0.05)
+						continue;
+				}
+				// split into two images
+				cv::Mat img_1 = src_img(cv::Rect(0, 0, separation_x[max_spacing_x_id * 2], src_img.size().height));
+				cv::Mat img_2 = src_img(cv::Rect(separation_x[max_spacing_x_id * 2 + 1], 0, src_img.size().width - separation_x[max_spacing_x_id * 2 + 1], src_img.size().height));
+				//cv::imwrite("../data/output_spacing/1_" + images[i], img_1);
+				//cv::imwrite("../data/output_spacing/2_" + images[i], img_2);
+				// clean up img_1 and img_2
+				cv::imwrite("../data/output_spacing/" + images[i], src_img);
+			}
+		}
+
 	}
 }
 
@@ -894,90 +937,10 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
-
-	// --- step 1
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
 	cv::Mat chip_seg;
-	apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
-	std::vector<int> boundaries = adjust_chip(chip_seg.clone());
-	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
-	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	pre_process(chip_seg, croppedImage, mi, bDebug, img_filename);
 	
-	// ---- step 2
-	// add padding
-	cv::Mat scale_img;
-	cv::resize(chip_seg, scale_img, cv::Size(mi.defaultSize[0], mi.defaultSize[1]));
-	// correct the color
-	for (int i = 0; i < scale_img.size().height; i++) {
-		for (int j = 0; j < scale_img.size().width; j++) {
-			//noise
-			if ((int)scale_img.at<uchar>(i, j) < 128) {
-				scale_img.at<uchar>(i, j) = (uchar)0;
-			}
-			else
-				scale_img.at<uchar>(i, j) = (uchar)255;
-		}
-	}
-	int dilation_type = cv::MORPH_RECT;
-	cv::Mat test_dilation;
-	int kernel_size = 3;
-	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
-	/// Apply the dilation operation
-	cv::dilate(scale_img, test_dilation, element);
-	cv::resize(test_dilation, test_dilation, chip_seg.size());
-	// correct the color
-	for (int i = 0; i < test_dilation.size().height; i++) {
-		for (int j = 0; j < test_dilation.size().width; j++) {
-			//noise
-			if ((int)test_dilation.at<uchar>(i, j) < 128) {
-				test_dilation.at<uchar>(i, j) = (uchar)0;
-			}
-			else
-				test_dilation.at<uchar>(i, j) = (uchar)255;
-		}
-	}
-	int padding_size = mi.paddingSize[0];
-	int borderType = cv::BORDER_CONSTANT;
-	cv::Mat test_img;
-	cv::copyMakeBorder(test_dilation, test_img, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 255, 255));
-	std::vector<std::vector<cv::Point> > contours;
-	std::vector<cv::Vec4i> hierarchy;
-	cv::findContours(test_img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-
-	std::vector<float> area_contours(contours.size());
-	std::vector<cv::Rect> boundRect(contours.size());
-	for (int i = 0; i < contours.size(); i++)
-	{
-		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
-		area_contours[i] = cv::contourArea(contours[i]);
-	}
-	std::sort(area_contours.begin(), area_contours.end());
-	float target_contour_area = area_contours[area_contours.size() / 2];
-	for (int i = 0; i < contours.size(); i++)
-	{
-		float area_contour = cv::contourArea(contours[i]);
-		if (area_contour < 0.5 * target_contour_area) {
-			cv::rectangle(test_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), cv::Scalar(255, 255, 255), -1);
-		}
-	}
-	/*
-	std::vector<int> space_x;
-	std::vector<int> space_y;
-	find_spacing(chip_seg, space_x, space_y, bDebug);
-	int left = 0, right = chip_seg.size().width - 1, top = 0, bot = chip_seg.size().height - 1;
-	if (space_x.size() > 3 && space_y.size() > 3) {
-		if (space_x[0] * 1.0 / chip_seg.size().width < 0.05)
-			left = space_x[1];
-		if (space_x[space_x.size() - 1] * 1.0 / chip_seg.size().width > 0.95)
-			right = space_x[space_x.size() - 2];
-		if (space_y[0] * 1.0 / chip_seg.size().height < 0.05)
-			top = space_y[1];
-		if (space_y[space_y.size() - 1] * 1.0 / chip_seg.size().height > 0.95)
-			bot = space_y[space_y.size() - 2];
-		chip_seg = chip_seg(cv::Rect(left, top, right - left + 1, bot - top + 1));
-		croppedImage = croppedImage(cv::Rect(left, top, right - left + 1, bot - top + 1));
-	}
-	*/
 	// add real chip size
 	int chip_width = croppedImage.size().width;
 	int chip_height = croppedImage.size().height;
@@ -1041,19 +1004,98 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	// copy info to the chip
 	chip.src_image = croppedImage.clone();
 	chip.seg_image = chip_seg.clone();
-	chip.x = cropped_chips[best_chip_id].x + boundaries[2];
-	chip.y = cropped_chips[best_chip_id].y + boundaries[0];
-	chip.width = boundaries[3] - boundaries[2] + 1;
-	chip.height = boundaries[1] - boundaries[0] + 1;
 	if (bDebug) {
 		/*for (int i = 0; i < cropped_chips.size(); i++) {
 			cv::imwrite("../data/confidences/" + std::to_string(i) + '_' + img_filename, cropped_chips[i]);
 		}*/
 		std::cout << "Facade type is " << type << std::endl;
 		cv::imwrite(mi.facadesFolder + "/" + img_filename, src_facade);
-		cv::imwrite(mi.dilatesFolder + "/" + img_filename, test_img);
 	}
 	return true;
+}
+
+void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool bDebug, std::string img_filename) {
+	// --- step 1
+	apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
+	cv::Mat scale_img;
+	cv::resize(chip_seg, scale_img, cv::Size(mi.defaultSize[0], mi.defaultSize[1]));
+	// correct the color
+	for (int i = 0; i < scale_img.size().height; i++) {
+		for (int j = 0; j < scale_img.size().width; j++) {
+			//noise
+			if ((int)scale_img.at<uchar>(i, j) < 128) {
+				scale_img.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				scale_img.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+	int dilation_type = cv::MORPH_RECT;
+	cv::Mat img_dilation;
+	int kernel_size = 3;
+	cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+	/// Apply the dilation operation
+	cv::dilate(scale_img, img_dilation, element);
+	cv::resize(img_dilation, img_dilation, chip_seg.size());
+	// correct the color
+	for (int i = 0; i < img_dilation.size().height; i++) {
+		for (int j = 0; j < img_dilation.size().width; j++) {
+			//noise
+			if ((int)img_dilation.at<uchar>(i, j) < 128) {
+				img_dilation.at<uchar>(i, j) = (uchar)0;
+			}
+			else
+				img_dilation.at<uchar>(i, j) = (uchar)255;
+		}
+	}
+	int padding_size = mi.paddingSize[0];
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Mat padding_img;
+	cv::copyMakeBorder(img_dilation, padding_img, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 255, 255));
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(padding_img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+	std::vector<float> area_contours(contours.size());
+	std::vector<cv::Rect> boundRect(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		area_contours[i] = cv::contourArea(contours[i]);
+	}
+	std::sort(area_contours.begin(), area_contours.end());
+	float target_contour_area = area_contours[area_contours.size() / 2];
+	for (int i = 0; i < contours.size(); i++)
+	{
+		float area_contour = cv::contourArea(contours[i]);
+		if (area_contour < 0.5 * target_contour_area) {
+			cv::rectangle(padding_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), cv::Scalar(255, 255, 255), -1);
+		}
+	}
+	chip_seg = padding_img(cv::Rect(padding_size, padding_size, chip_seg.size().width, chip_seg.size().height));
+	// --- step 2
+	std::vector<int> boundaries = adjust_chip(chip_seg.clone());
+	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	// ---- step 3
+	/*
+	std::vector<int> space_x;
+	std::vector<int> space_y;
+	find_spacing(chip_seg, space_x, space_y, bDebug);
+	int left = 0, right = chip_seg.size().width - 1, top = 0, bot = chip_seg.size().height - 1;
+	if (space_x.size() > 3 && space_y.size() > 3) {
+	if (space_x[0] * 1.0 / chip_seg.size().width < 0.05)
+	left = space_x[1];
+	if (space_x[space_x.size() - 1] * 1.0 / chip_seg.size().width > 0.95)
+	right = space_x[space_x.size() - 2];
+	if (space_y[0] * 1.0 / chip_seg.size().height < 0.05)
+	top = space_y[1];
+	if (space_y[space_y.size() - 1] * 1.0 / chip_seg.size().height > 0.95)
+	bot = space_y[space_y.size() - 2];
+	chip_seg = chip_seg(cv::Rect(left, top, right - left + 1, bot - top + 1));
+	croppedImage = croppedImage(cv::Rect(left, top, right - left + 1, bot - top + 1));
+	}
+	*/
 }
 
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
@@ -1482,10 +1524,10 @@ std::vector<int> adjust_chip(cv::Mat chip) {
 	return boundaries;
 }
 
-void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &space_y, bool bDebug) {
+void find_spacing(cv::Mat src_img, std::vector<int> &separation_x, std::vector<int> &separation_y, bool bDebug) {
 	if (src_img.channels() == 4) {
-		space_x.clear();
-		space_y.clear();
+		separation_x.clear();
+		separation_y.clear();
 		return;
 	}
 	// horizontal 
@@ -1509,7 +1551,7 @@ void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &
 			}
 		}
 		if (bSpacing_pre != bSpacing_curr) {
-			space_x.push_back(i);
+			separation_x.push_back(i);
 		}
 		bSpacing_pre = bSpacing_curr;
 	}
@@ -1534,13 +1576,13 @@ void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &
 			}
 		}
 		if (bSpacing_pre != bSpacing_curr) {
-			space_y.push_back(i);
+			separation_y.push_back(i);
 		}
 		bSpacing_pre = bSpacing_curr;
 	}
 	if (bDebug) {
-		std::cout << "space_x is " << space_x << std::endl;
-		std::cout << "space_y is " << space_y << std::endl;
+		std::cout << "separation_x is " << separation_x << std::endl;
+		std::cout << "separation_y is " << separation_y << std::endl;
 	}
 	return;
 }
@@ -1774,7 +1816,7 @@ bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_fi
 	if (bDebug) {
 		cv::imwrite(mi.chipsFolder + "/" + img_filename, chip.src_image);
 		cv::imwrite(mi.segsFolder + "/" + img_filename, chip.seg_image);
-		//cv::imwrite(mi.dilatesFolder + "/" + img_filename, chip.dilation_dst);
+		cv::imwrite(mi.dilatesFolder + "/" + img_filename, chip.dilation_dst);
 		cv::imwrite(mi.alignsFolder + "/" + img_filename, chip.aligned_img);
 		cv::imwrite(mi.dnnsInFolder + "/" + img_filename, chip.dnnIn_image);
 	}

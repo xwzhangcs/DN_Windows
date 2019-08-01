@@ -95,6 +95,7 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi);
 void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
 void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
 void collect_roi_images(std::string images_path, std::string output_path);
+void test_spacing(std::string images_path, ModelInfo& mi, bool bDebug);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
@@ -110,17 +111,17 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 std::vector<int> adjust_chip(cv::Mat chip);
 int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug, std::string img_filename);
-void find_spacing(cv::Mat src_img, std::vector<int> &space_x, std::vector<int> &space_y, bool bDebug);
+void find_spacing(cv::Mat src_img, std::vector<int> &separation_x, std::vector<int> &separation_y, bool bDebug);
 cv::Rect findLargestRectangle(cv::Mat image);
 bool findIntersection(cv::Rect a1, cv::Rect a2);
 bool insideRect(cv::Rect a1, cv::Point p);
+void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool bDebug, std::string img_filename);
 
 /**** steps *****/
 bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo& chip, bool bMultipleChips, bool bDebug, std::string img_filename);
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
-bool post_process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
 
