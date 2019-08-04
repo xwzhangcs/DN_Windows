@@ -14,8 +14,6 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_spacing("../data/segs", mi, true);
-	return 0;
 	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -23,7 +21,7 @@ int main(int argc, const char* argv[]) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
-			/*if (img_filename != "0060_0025.png")
+			/*if (img_filename != "0009_0025.png")
 				continue;*/
 			// read metajson
 			FacadeInfo fi;
@@ -406,6 +404,8 @@ void test_spacing(std::string images_path, ModelInfo& mi, bool bDebug) {
 		std::string img_name = images_path + '/' + images[i];
 		std::cout << "img_name is " << img_name << std::endl;
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.size().width < 25)
+			continue;
 		std::vector<int> separation_x;
 		std::vector<int> separation_y;
 		find_spacing(src_img, separation_x, separation_y, bDebug);
@@ -415,25 +415,22 @@ void test_spacing(std::string images_path, ModelInfo& mi, bool bDebug) {
 			for (int i = 0; i < separation_x.size(); i += 2) {
 				space_x.push_back(separation_x[i + 1] - separation_x[i]);
 			}
-			std::cout << "space_x is " << space_x << std::endl;
 			int max_spacing_x_id =std::max_element(space_x.begin(), space_x.end()) - space_x.begin();
 			double ratio_x = space_x[max_spacing_x_id] * 1.0 / src_img.size().width;
-			std::cout << "ratio_x is " << ratio_x << std::endl;
 			if (ratio_x > 0.24)
 			{
 				if (space_x.size() >= 2) {
 					float average_spacing = accumulate(space_x.begin(), space_x.end(), 0.0) / space_x.size();
-					std::cout << "average_spacing is " << average_spacing << std::endl;
 					if (abs(space_x[max_spacing_x_id] - average_spacing) / src_img.size().width < 0.05)
 						continue;
 				}
 				// split into two images
 				cv::Mat img_1 = src_img(cv::Rect(0, 0, separation_x[max_spacing_x_id * 2], src_img.size().height));
 				cv::Mat img_2 = src_img(cv::Rect(separation_x[max_spacing_x_id * 2 + 1], 0, src_img.size().width - separation_x[max_spacing_x_id * 2 + 1], src_img.size().height));
-				//cv::imwrite("../data/output_spacing/1_" + images[i], img_1);
-				//cv::imwrite("../data/output_spacing/2_" + images[i], img_2);
-				// clean up img_1 and img_2
-				cv::imwrite("../data/output_spacing/" + images[i], src_img);
+				if(img_1.size().width > img_2.size().width)
+					cv::imwrite("../data/output_spacing/" + images[i], img_1);
+				else
+					cv::imwrite("../data/output_spacing/" + images[i], img_2);
 			}
 		}
 
@@ -1078,24 +1075,54 @@ void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool b
 	chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
 	// ---- step 3
-	/*
-	std::vector<int> space_x;
-	std::vector<int> space_y;
-	find_spacing(chip_seg, space_x, space_y, bDebug);
-	int left = 0, right = chip_seg.size().width - 1, top = 0, bot = chip_seg.size().height - 1;
-	if (space_x.size() > 3 && space_y.size() > 3) {
-	if (space_x[0] * 1.0 / chip_seg.size().width < 0.05)
-	left = space_x[1];
-	if (space_x[space_x.size() - 1] * 1.0 / chip_seg.size().width > 0.95)
-	right = space_x[space_x.size() - 2];
-	if (space_y[0] * 1.0 / chip_seg.size().height < 0.05)
-	top = space_y[1];
-	if (space_y[space_y.size() - 1] * 1.0 / chip_seg.size().height > 0.95)
-	bot = space_y[space_y.size() - 2];
-	chip_seg = chip_seg(cv::Rect(left, top, right - left + 1, bot - top + 1));
-	croppedImage = croppedImage(cv::Rect(left, top, right - left + 1, bot - top + 1));
+	if (chip_seg.size().width < 25)
+		return;
+	std::vector<int> separation_x;
+	std::vector<int> separation_y;
+	cv::Mat spacing_img = chip_seg.clone();
+	float threshold_spacing = 0.24;
+	find_spacing(spacing_img, separation_x, separation_y, bDebug); 
+	if(separation_x.size() % 2 != 0)
+		return;
+	if (separation_x.size() > 0) {
+		// compute spacing
+		std::vector<int> space_x;
+		for (int i = 0; i < separation_x.size(); i += 2) {
+			space_x.push_back(separation_x[i + 1] - separation_x[i]);
+		}
+		int max_spacing_x_id = std::max_element(space_x.begin(), space_x.end()) - space_x.begin();
+		double ratio_x = space_x[max_spacing_x_id] * 1.0 / spacing_img.size().width;
+		if (ratio_x > threshold_spacing)
+		{
+			if (space_x.size() >= 2) {
+				float average_spacing = accumulate(space_x.begin(), space_x.end(), 0.0) / space_x.size();
+				if (abs(space_x[max_spacing_x_id] - average_spacing) / spacing_img.size().width < 0.05)
+					return;
+			}
+			// split into two images
+			cv::Mat img_1_seg = spacing_img(cv::Rect(0, 0, separation_x[max_spacing_x_id * 2], spacing_img.size().height));
+			cv::Mat img_2_seg = spacing_img(cv::Rect(separation_x[max_spacing_x_id * 2 + 1], 0, spacing_img.size().width - separation_x[max_spacing_x_id * 2 + 1], spacing_img.size().height));
+			cv::Mat chip_spacing;
+			if (img_1_seg.size().width > img_2_seg.size().width) {
+				chip_spacing = croppedImage(cv::Rect(0, 0, separation_x[max_spacing_x_id * 2], spacing_img.size().height));
+				// clean up
+				std::vector<int> boundaries = adjust_chip(img_1_seg.clone());
+				img_1_seg = img_1_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+				chip_spacing = chip_spacing(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+				chip_seg = img_1_seg.clone();
+				croppedImage = chip_spacing.clone();
+			}				
+			else {
+				chip_spacing = croppedImage(cv::Rect(separation_x[max_spacing_x_id * 2 + 1], 0, spacing_img.size().width - separation_x[max_spacing_x_id * 2 + 1], spacing_img.size().height));
+				// clearn up
+				std::vector<int> boundaries = adjust_chip(img_2_seg.clone());
+				img_2_seg = img_2_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+				chip_spacing = chip_spacing(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+				chip_seg = img_2_seg.clone();
+				croppedImage = chip_spacing.clone();
+			}
+		}
 	}
-	*/
 }
 
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
