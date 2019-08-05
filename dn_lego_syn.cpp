@@ -21,7 +21,7 @@ int main(int argc, const char* argv[]) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
-			/*if (img_filename != "0009_0025.png")
+			/*if (img_filename != "0010_0084.png")
 				continue;*/
 			// read metajson
 			FacadeInfo fi;
@@ -1080,7 +1080,7 @@ void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool b
 	std::vector<int> separation_x;
 	std::vector<int> separation_y;
 	cv::Mat spacing_img = chip_seg.clone();
-	float threshold_spacing = 0.24;
+	float threshold_spacing = 0.238;
 	find_spacing(spacing_img, separation_x, separation_y, bDebug); 
 	if(separation_x.size() % 2 != 0)
 		return;
@@ -1092,6 +1092,8 @@ void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool b
 		}
 		int max_spacing_x_id = std::max_element(space_x.begin(), space_x.end()) - space_x.begin();
 		double ratio_x = space_x[max_spacing_x_id] * 1.0 / spacing_img.size().width;
+		if (bDebug)
+			std::cout << "ratio_x is " << ratio_x << std::endl;
 		if (ratio_x > threshold_spacing)
 		{
 			if (space_x.size() >= 2) {
@@ -1856,6 +1858,14 @@ bool post_process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string i
 
 std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename) {
 	int num_classes = mi.number_grammars;
+	// 
+	std::vector<int> separation_x;
+	std::vector<int> separation_y;
+	cv::Mat spacing_img = chip.dnnIn_image.clone();
+	find_spacing(spacing_img, separation_x, separation_y, bDebug);
+	int spacing_r = separation_y.size() / 2;
+	int spacing_c = separation_x.size() / 2;
+
 	cv::Mat dnn_img_rgb;
 	cv::cvtColor(chip.dnnIn_image.clone(), dnn_img_rgb, CV_BGR2RGB);
 	cv::Mat img_float;
@@ -1936,6 +1946,16 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 		//do nothing
 		predictions = grammar1(mi, paras, bDebug);
 	}
+	if (best_class % 2 == 0) {
+		if (abs(predictions[0] + 1 - spacing_r) <= 1)
+			predictions[0] = spacing_r - 1;
+	}
+	else {
+		if (abs(predictions[0] - spacing_r) <= 1)
+			predictions[0] = spacing_r;
+	}
+	if (abs(predictions[1] - spacing_c) <= 1)
+		predictions[1] = spacing_c;
 	// write back to fi
 	fi.conf.resize(num_classes);
 	for (int i = 0; i < num_classes; i++)
