@@ -1554,7 +1554,7 @@ std::vector<int> adjust_chip(cv::Mat chip) {
 }
 
 void find_spacing(cv::Mat src_img, std::vector<int> &separation_x, std::vector<int> &separation_y, bool bDebug) {
-	if (src_img.channels() == 4) {
+	if (src_img.channels() != 1 ) {
 		separation_x.clear();
 		separation_y.clear();
 		return;
