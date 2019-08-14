@@ -14,6 +14,11 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	ChipInfo chip;
+	chip.seg_image = cv::imread("../data/seg_test/0011_seg.png", CV_LOAD_IMAGE_UNCHANGED);
+	process_chip(chip, mi, true, "test.png");
+	//test_classifier_model("../data/seg_test", mi, true);
+	return 0;
 	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
