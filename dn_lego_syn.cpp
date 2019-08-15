@@ -9,16 +9,21 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	//test_color("../data/color/chip", "../data/color/seg", "../data/color/mix");
+	/*std::vector<int> separation_x;
+	std::vector<int> separation_y;
+	cv::Mat spacing_img = cv::imread("../data/0002_0009.png", CV_LOAD_IMAGE_UNCHANGED);
+	find_spacing(spacing_img, separation_x, separation_y, false);
+	int spacing_r = separation_y.size() / 2;
+	int spacing_c = separation_x.size() / 2;
+	std::cout << "spacing_r is " << spacing_r << std::endl;
+	std::cout << "spacing_c is " << spacing_c << std::endl;
+	return 0;*/
 	//
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	ChipInfo chip;
-	chip.seg_image = cv::imread("../data/seg_test/0011_seg.png", CV_LOAD_IMAGE_UNCHANGED);
-	process_chip(chip, mi, true, "test.png");
-	//test_classifier_model("../data/seg_test", mi, true);
-	return 0;
 	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -26,7 +31,7 @@ int main(int argc, const char* argv[]) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
-			/*if (img_filename != "0010_0084.png")
+			/*if (img_filename != "0001_0048.png")
 				continue;*/
 			// read metajson
 			FacadeInfo fi;
@@ -39,8 +44,8 @@ int main(int argc, const char* argv[]) {
 				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
 				std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
-					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2]);
-					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2]);
+					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
+					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
 					synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
 				}
 			}
@@ -48,6 +53,82 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void test_color(std::string image_1_path, std::string image_2_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(image_1_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string image_1 = image_1_path + '/' + images[i];
+		cv::Mat src_1 = cv::imread(image_1, CV_LOAD_IMAGE_UNCHANGED);
+		std::string image_2 = image_2_path + '/' + images[i];
+		cv::Mat src_2 = cv::imread(image_2, CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat outpt_img = src_1.clone();
+		// write back to json file
+		cv::Scalar bg_avg_color(0, 0, 0);
+		cv::Scalar win_avg_color(0, 0, 0);
+		{
+			int bg_count = 0;
+			int win_count = 0;
+			for (int i = 0; i < src_2.size().height; i++) {
+				for (int j = 0; j < src_2.size().width; j++) {
+					if ((int)src_2.at<uchar>(i, j) == 0) {
+						if (src_1.channels() == 4) {
+							win_avg_color.val[0] += src_1.at<cv::Vec4b>(i, j)[0];
+							win_avg_color.val[1] += src_1.at<cv::Vec4b>(i, j)[1];
+							win_avg_color.val[2] += src_1.at<cv::Vec4b>(i, j)[2];
+						}
+						if (src_1.channels() == 3) {
+							win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+							win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+							win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+						}
+						win_count++;
+					}
+					else {
+						if (src_1.channels() == 4) {
+							bg_avg_color.val[0] += src_1.at<cv::Vec4b>(i, j)[0];
+							bg_avg_color.val[1] += src_1.at<cv::Vec4b>(i, j)[1];
+							bg_avg_color.val[2] += src_1.at<cv::Vec4b>(i, j)[2];
+						}
+						if (src_1.channels() == 3) {
+							bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+							bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+							bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+						}
+						bg_count++;
+					}
+				}
+			}
+			if (win_count > 0) {
+				win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+				win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+				win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+			}
+			if (bg_count > 0) {
+				bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+				bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+				bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+			}
+		}
+		for (int i = 0; i < src_2.size().height; i++) {
+			for (int j = 0; j < src_2.size().width; j++) {
+				if ((int)src_2.at<uchar>(i, j) == 0) {
+					outpt_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
+					outpt_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
+					outpt_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+				}
+				else {
+					outpt_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
+					outpt_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
+					outpt_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+				}
+			}
+		}
+		std::cout << "win_avg_color is " << win_avg_color << std::endl;
+		std::cout << "bg_avg_color is " << bg_avg_color << std::endl;
+		cv::imwrite(output_path + '/' + images[i], outpt_img);
+	}
 }
 
 void test_rejection_model(std::string images_path, ModelInfo& mi) {
@@ -338,11 +419,15 @@ void test_overlay_images(std::string image_1_path, std::string image_2_path, std
 		cv::Mat src_1 = cv::imread(image_1, CV_LOAD_IMAGE_UNCHANGED);
 		if(src_1.channels() == 3)
 			cv::cvtColor(src_1, src_1, CV_BGR2BGRA);
+		if (src_1.channels() == 1)
+			cv::cvtColor(src_1, src_1, CV_GRAY2BGRA);
 		std::string image_2 = image_2_path + '/' + images[i];
 		cv::Mat src_2 = cv::imread(image_2, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_2.channels() == 3)
 			cv::cvtColor(src_2, src_2, CV_BGR2BGRA);
-		double alpha = 0.7; double beta;
+		if (src_2.channels() == 1)
+			cv::cvtColor(src_2, src_2, CV_GRAY2BGRA);
+		double alpha = 0.8; double beta;
 		beta = (1.0 - alpha);
 		cv::Mat dst;
 		cv::addWeighted(src_1, alpha, src_2, beta, 0.0, dst);
@@ -1559,10 +1644,13 @@ std::vector<int> adjust_chip(cv::Mat chip) {
 }
 
 void find_spacing(cv::Mat src_img, std::vector<int> &separation_x, std::vector<int> &separation_y, bool bDebug) {
-	if (src_img.channels() != 1 ) {
+	if (src_img.channels() == 4 ) {
 		separation_x.clear();
 		separation_y.clear();
 		return;
+	}
+	if (src_img.channels() == 3) {
+		cv::cvtColor(src_img, src_img, CV_BGR2GRAY);
 	}
 	// horizontal 
 	bool bSpacing_pre = false;
@@ -1952,14 +2040,14 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 		predictions = grammar1(mi, paras, bDebug);
 	}
 	if (best_class % 2 == 0) {
-		if (abs(predictions[0] + 1 - spacing_r) <= 1)
+		if (abs(predictions[0] + 1 - spacing_r) <= 1 && predictions[0] > 1)
 			predictions[0] = spacing_r - 1;
 	}
 	else {
-		if (abs(predictions[0] - spacing_r) <= 1)
+		if (abs(predictions[0] - spacing_r) <= 1 && predictions[0] > 1)
 			predictions[0] = spacing_r;
 	}
-	if (abs(predictions[1] - spacing_c) <= 1)
+	if (abs(predictions[1] - spacing_c) <= 1 && predictions[1] > 1)
 		predictions[1] = spacing_c;
 	// write back to fi
 	fi.conf.resize(num_classes);
@@ -1998,6 +2086,11 @@ void synthesis(std::vector<double> predictions, cv::Size src_size, std::string d
 		double relative_width = predictions[3];
 		double relative_height = predictions[4];
 		syn_img = util::generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, relative_width, relative_height);
+		std::cout << "img_rows is " << img_rows << std::endl;
+		std::cout << "img_cols is " << img_cols << std::endl;
+		std::cout << "img_groups is " << img_groups << std::endl;
+		std::cout << "relative_width is " << relative_width << std::endl;
+		std::cout << "relative_height is " << relative_height << std::endl;
 	}
 	if(predictions.size() == 8) {
 		int img_rows = predictions[0];
