@@ -14,7 +14,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_classifier_model("../data/imgs", mi, true);
+	test_rejection_model("../data/test",mi );
+	//test_classifier_model("../data/imgs", mi, true);
 	//test_chip_choose("../data/chips", "../data/best_chip", mi);
 	return 0;
 	//
@@ -167,7 +168,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 		}*/
 		if (true) {
 			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
-			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2)) << std::endl;
+			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2).item<float>()) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
 	}
@@ -402,7 +403,6 @@ void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) 
 			best_class = best_class + 1;
 			std::cout << "DNN class is " << best_class << std::endl;
 		}
-
 		// choose conresponding estimation DNN
 		// number of paras
 		int num_paras = mi.grammars[best_class - 1].number_paras;
@@ -1057,6 +1057,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	// choose the best chip
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
+	return false;
 	// adjust the best chip
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
 	cv::Mat chip_seg;
@@ -1591,6 +1592,10 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 		// method 2
 		if (true) {
 			for (int i = 0; i < chips.size(); i++) {
+				if (bDebug) {
+					std::string filename = path + "/chip_" + to_string(i) + ".png";
+					cv::imwrite(filename, chips[i].src_image);
+				}
 				cv::Mat src_img = chips[i].src_image.clone();
 				if (src_img.channels() == 4) // ensure there're 3 channels
 					cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
@@ -1619,6 +1624,8 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 
 		if (bDebug) {
 			std::cout << "best_chip_id is " << best_chip_id << std::endl;
+			std::string filename = "../data/best_chip/" + img_filename;
+			cv::imwrite(filename, chips[best_chip_id].src_image);
 		}
 	}
 	return best_chip_id;
