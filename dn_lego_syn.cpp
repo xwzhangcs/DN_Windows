@@ -3,27 +3,20 @@
 #include "Utils.h"
 #include "dn_lego_eval.h"
 #include "optGrammarParas.h"
+#include <windows.h>
 
 int main(int argc, const char* argv[]) {
 	if (argc != 4) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//test_color("../data/color/chip", "../data/color/seg", "../data/color/mix");
-	/*std::vector<int> separation_x;
-	std::vector<int> separation_y;
-	cv::Mat spacing_img = cv::imread("../data/0002_0009.png", CV_LOAD_IMAGE_UNCHANGED);
-	find_spacing(spacing_img, separation_x, separation_y, false);
-	int spacing_r = separation_y.size() / 2;
-	int spacing_c = separation_x.size() / 2;
-	std::cout << "spacing_r is " << spacing_r << std::endl;
-	std::cout << "spacing_c is " << spacing_c << std::endl;
-	return 0;*/
-	//
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	test_classifier_model("../data/imgs", mi, true);
+	//test_chip_choose("../data/chips", "../data/best_chip", mi);
+	return 0;
 	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -166,17 +159,58 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 				best_class = i;
 			}
 		}
-		if (best_score > 0.96) {
+		/*if (best_score > 0.96) {
 			cv::imwrite("../data/D4/A/" + images[i], src_img);
 		}
 		else {
 			cv::imwrite("../data/D4/B/" + images[i], src_img);
-		}
+		}*/
 		if (true) {
 			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
-			std::cout << img_name << ": "<<confidences_tensor.slice(1, 0, 2) << std::endl;
+			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2)) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
+	}
+}
+
+void test_chip_choose(std::string images_path, std::string output, ModelInfo& mi) {
+	std::vector<std::string> facades = get_all_files_names_within_folder(images_path);
+	for (int index = 0; index < facades.size(); index++) {
+		std::vector<std::string> chip_images = get_all_files_names_within_folder(images_path + "/" + facades[index]);
+		double best_score = 10000;
+		int best_class = -1;
+		for (int i = 0; i < chip_images.size(); i++) {
+			std::string img_name = images_path + "/" + facades[index] + '/' + chip_images[i];
+			std::cout << img_name << std::endl;
+			cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+			if (src_img.channels() == 4) // ensure there're 3 channels
+				cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+			// prepare inputs
+			cv::Mat scale_img;
+			cv::resize(src_img, scale_img, cv::Size(224, 224));
+			cv::Mat dnn_img_rgb;
+			cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+			cv::Mat img_float;
+			dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+			auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+			img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+			img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+			img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+			img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+			std::vector<torch::jit::IValue> inputs;
+			inputs.push_back(img_tensor);
+			torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+
+			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+			double tmp = log(confidences_tensor.slice(1, 1, 2).item<float>());
+			if (tmp < best_score) {
+				best_score = tmp;
+				best_class = i;
+			}
+		}
+		cv::Mat src_img = cv::imread(images_path + "/" + facades[index] + '/' + chip_images[best_class], CV_LOAD_IMAGE_UNCHANGED);
+		cv::imwrite(output + "/" + facades[index] + ".png", src_img);
 	}
 }
 
@@ -1536,17 +1570,53 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 		best_chip_id = 0;
 	else {
 		std::vector<double> confidence_values;
-		confidence_values.resize(chips.size());
-		for (int i = 0; i < chips.size(); i++) {
-			std::string filename = "../data/chips/" + img_filename.substr(0, img_filename.find(".png")) + "_" +to_string(i) +".png";
-			confidence_values[i] = compute_chip_info(chips[i], mi, bDebug, filename)[0];
-			// try to use reject model to get image quality score
-			if (bDebug) {
-				std::cout << "chip " << i<< " score is " << confidence_values[i] << std::endl;
-			}
+		std::string path = "../data/chips/" + img_filename.substr(0, img_filename.find(".png"));
+		if (CreateDirectory(path.c_str(), NULL)) {
+			//
 		}
-		// find the best chip id
-		best_chip_id = std::max_element(confidence_values.begin(), confidence_values.end()) - confidence_values.begin();
+		confidence_values.resize(chips.size());
+		// method 1
+		if (false) {
+			for (int i = 0; i < chips.size(); i++) {
+				std::string filename = path + "/chip_" + to_string(i) + ".png";
+				confidence_values[i] = compute_chip_info(chips[i], mi, bDebug, filename)[0];
+				// try to use reject model to get image quality score
+				if (bDebug) {
+					std::cout << "chip " << i << " score is " << confidence_values[i] << std::endl;
+				}
+			}
+			// find the best chip id
+			best_chip_id = std::max_element(confidence_values.begin(), confidence_values.end()) - confidence_values.begin();
+		}
+		// method 2
+		if (true) {
+			for (int i = 0; i < chips.size(); i++) {
+				cv::Mat src_img = chips[i].src_image.clone();
+				if (src_img.channels() == 4) // ensure there're 3 channels
+					cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+				// prepare inputs
+				cv::Mat scale_img;
+				cv::resize(src_img, scale_img, cv::Size(224, 224));
+				cv::Mat dnn_img_rgb;
+				cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+				cv::Mat img_float;
+				dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+				auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+				img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+				img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+				img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+				img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+				std::vector<torch::jit::IValue> inputs;
+				inputs.push_back(img_tensor);
+				torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+
+				torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+				confidence_values[i] = log(confidences_tensor.slice(1, 1, 2).item<float>());
+			}
+			best_chip_id = std::min_element(confidence_values.begin(), confidence_values.end()) - confidence_values.begin();
+		}
+
 		if (bDebug) {
 			std::cout << "best_chip_id is " << best_chip_id << std::endl;
 		}

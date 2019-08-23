@@ -91,6 +91,7 @@ struct ChipInfo {
 
 /**** test functions *****/
 void test_rejection_model(std::string images_path, ModelInfo& mi);
+void test_chip_choose(std::string images_path, std::string output, ModelInfo& mi);
 void test_segmentation_model(std::string images_path, ModelInfo& mi);
 void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug);
 void test_overlay_images(std::string image_1_path, std::string image_2_path, std::string output_path);
