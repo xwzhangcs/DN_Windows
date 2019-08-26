@@ -14,14 +14,7 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-<<<<<<< HEAD
-	//test_rejection_model("D:/LEGO_meeting_summer_2019/0825/check/D4/good2bad", mi);
-	test_segmentation_model("D:/LEGO_meeting_summer_2019/0825_seg/D8", mi);
-=======
-	test_rejection_model("../data/test",mi );
-	//test_classifier_model("../data/imgs", mi, true);
-	//test_chip_choose("../data/chips", "../data/best_chip", mi);
->>>>>>> 3b770fad8581deb547a7afd181ded299166a9ed7
+	test_classifier_model("../data/grammar_classifier", mi, true);
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -172,12 +165,8 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 		}*/
 		if (true) {
 			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
-<<<<<<< HEAD
-			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2)) << std::endl;
-			//std::cout << img_name << ": " << confidences_tensor.slice(1, 0, 2) << std::endl;
-=======
-			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2).item<float>()) << std::endl;
->>>>>>> 3b770fad8581deb547a7afd181ded299166a9ed7
+			std::cout << img_name << ": " << confidences_tensor.slice(1, 0, 2) << std::endl;
+			//std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2).item<float>()) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
 	}
@@ -945,8 +934,8 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 	// if facades are too small threshold is 3m
 	if (facadeSize[0] < 6 || facadeSize[1] < 6)
 		return 0;
-	// if the images are too small threshold is 20 by 20
-	if (src_img.size().height < 20 || src_img.size().width < 20)
+	// if the images are too small threshold is 25 by 25
+	if (src_img.size().height < 25 || src_img.size().width < 25)
 		return 0;
 	// prepare inputs
 	cv::Mat scale_img;
@@ -986,7 +975,7 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 		std::cout << confidences_tensor.slice(1, 0, 2) << std::endl;
 		std::cout << "Reject class is " << best_class << std::endl;
 	}
-	if (best_class == 1 || best_score < 0.8) // bad facades
+	if (best_class == 1 || best_score < 0.90) // bad facades
 		return 0;
 	else {
 		fi.good_conf = best_score;
@@ -1069,11 +1058,16 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	// choose the best chip
 	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
-	return false;
 	// adjust the best chip
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
 	cv::Mat chip_seg;
-	pre_process(chip_seg, croppedImage, mi, bDebug, img_filename);
+	{
+		apply_segmentation_model(croppedImage, chip_seg, mi, bDebug, img_filename);
+		std::vector<int> boundaries = adjust_chip(chip_seg.clone());
+		chip_seg = chip_seg(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+		croppedImage = croppedImage(cv::Rect(boundaries[2], boundaries[0], boundaries[3] - boundaries[2] + 1, boundaries[1] - boundaries[0] + 1));
+	}
+	//pre_process(chip_seg, croppedImage, mi, bDebug, img_filename);
 	
 	// add real chip size
 	int chip_width = croppedImage.size().width;
@@ -1584,8 +1578,8 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 	else {
 		std::vector<double> confidence_values;
 		std::string path = "../data/chips/" + img_filename.substr(0, img_filename.find(".png"));
-		if (CreateDirectory(path.c_str(), NULL)) {
-			//
+		if (bDebug) {
+			CreateDirectory(path.c_str(), NULL);
 		}
 		confidence_values.resize(chips.size());
 		// method 1
@@ -2319,7 +2313,7 @@ cv::Mat deSkewImg(cv::Mat src_img) {
 		}
 	}
 	drawing = drawing(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
-	cv::Mat aligned_img = cleanAlignedImage(drawing, 0.10);
+	cv::Mat aligned_img = cleanAlignedImage(drawing, 0.05);
 	return aligned_img;
 }
 
