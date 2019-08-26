@@ -34,3 +34,6 @@ seg_model_histeq.pt
 seg_model_pan.pt
 seg_model_new.pt
 seg_model_new_aug.pt
+reject_model_classifier_old.pt
+reject_model_classifier_v1.pt
+reject_model_classifier_histeq.pt

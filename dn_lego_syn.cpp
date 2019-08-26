@@ -14,10 +14,9 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_classifier_model("../data/imgs", mi, true);
-	//test_chip_choose("../data/chips", "../data/best_chip", mi);
+	//test_rejection_model("D:/LEGO_meeting_summer_2019/0825/check/D4/good2bad", mi);
+	test_segmentation_model("D:/LEGO_meeting_summer_2019/0825_seg/D8", mi);
 	return 0;
-	//
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -160,14 +159,15 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 			}
 		}
 		/*if (best_score > 0.96) {
-			cv::imwrite("../data/D4/A/" + images[i], src_img);
+			cv::imwrite("../data/A/" + images[i], src_img);
 		}
 		else {
-			cv::imwrite("../data/D4/B/" + images[i], src_img);
+			cv::imwrite("../data/B/" + images[i], src_img);
 		}*/
 		if (true) {
 			//std::cout << out_tensor.slice(1, 0, 2) << std::endl;
 			std::cout << img_name << ": "<< log(confidences_tensor.slice(1, 1, 2)) << std::endl;
+			//std::cout << img_name << ": " << confidences_tensor.slice(1, 0, 2) << std::endl;
 			std::cout << "Reject class is " << best_class << std::endl;
 		}
 	}
@@ -215,17 +215,20 @@ void test_chip_choose(std::string images_path, std::string output, ModelInfo& mi
 }
 
 void test_segmentation_model(std::string images_path, ModelInfo& mi) {
-	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/src");
 	for (int index = 0; index < images.size(); index++) {
-		std::string img_name = images_path + "/" + images[index];
+		std::string img_name = images_path + "/src/" + images[index];
 		std::cout << "img_name is " << img_name << std::endl;
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) // ensure there're 3 channels
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-		int run_times = 3;
+		int run_times = 1;
 		// scale to seg size
 		cv::Mat scale_img;
 		cv::resize(src_img, scale_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
+		if (true) {
+			cv::imwrite(images_path + "/A/" + images[index], scale_img);
+		}
 		cv::Mat dnn_img_rgb;
 		if (mi.seg_module_type == 0) {
 			cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
@@ -299,9 +302,9 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 						color_mark[h][w] += 1;
 				}
 			}
-			if (false) {
+			if (true) {
 				cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
-				cv::imwrite(images_path + "/segs/" + images[index], resultImg);
+				cv::imwrite(images_path + "/B/" + images[index], resultImg);
 			}
 		}
 		/*cv::Mat seg_final_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
@@ -320,38 +323,38 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 				}
 			}
 		}*/
-		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
-		int num_majority = ceil(0.5 * run_times);
-		for (int i = 0; i < color_mark.size(); i++) {
-			for (int j = 0; j < color_mark[i].size(); j++) {
-				if (color_mark[i][j] < num_majority)
-					gray_img.at<uchar>(i, j) = (uchar)0;
-				else
-					gray_img.at<uchar>(i, j) = (uchar)255;
-			}
-		}
-		// scale to grammar size
-		cv::Mat chip_seg;
-		cv::resize(gray_img, chip_seg, src_img.size());
-		// correct the color
-		for (int i = 0; i < chip_seg.size().height; i++) {
-			for (int j = 0; j < chip_seg.size().width; j++) {
-				//noise
-				if ((int)chip_seg.at<uchar>(i, j) < 128) {
-					chip_seg.at<uchar>(i, j) = (uchar)0;
-				}
-				else
-					chip_seg.at<uchar>(i, j) = (uchar)255;
-			}
-		}
-		std::string output_img_name = "";
-		if(mi.seg_module_type == 0)
-			output_img_name = "../data/segs_normal/" + images[index];
-		else if(mi.seg_module_type == 1)
-			output_img_name = "../data/segs_histeq/" + images[index];
-		else
-			output_img_name = "../data/segs_pan/" + images[index];
-		cv::imwrite(output_img_name, chip_seg);
+		//cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
+		//int num_majority = ceil(0.5 * run_times);
+		//for (int i = 0; i < color_mark.size(); i++) {
+		//	for (int j = 0; j < color_mark[i].size(); j++) {
+		//		if (color_mark[i][j] < num_majority)
+		//			gray_img.at<uchar>(i, j) = (uchar)0;
+		//		else
+		//			gray_img.at<uchar>(i, j) = (uchar)255;
+		//	}
+		//}
+		//// scale to grammar size
+		//cv::Mat chip_seg;
+		//cv::resize(gray_img, chip_seg, src_img.size());
+		//// correct the color
+		//for (int i = 0; i < chip_seg.size().height; i++) {
+		//	for (int j = 0; j < chip_seg.size().width; j++) {
+		//		//noise
+		//		if ((int)chip_seg.at<uchar>(i, j) < 128) {
+		//			chip_seg.at<uchar>(i, j) = (uchar)0;
+		//		}
+		//		else
+		//			chip_seg.at<uchar>(i, j) = (uchar)255;
+		//	}
+		//}
+		//std::string output_img_name = "";
+		//if(mi.seg_module_type == 0)
+		//	output_img_name = "../data/segs_normal/" + images[index];
+		//else if(mi.seg_module_type == 1)
+		//	output_img_name = "../data/segs_histeq/" + images[index];
+		//else
+		//	output_img_name = "../data/segs_pan/" + images[index];
+		//cv::imwrite(output_img_name, chip_seg);
 	}
 }
 
@@ -933,8 +936,8 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 	// if facades are too small threshold is 3m
 	if (facadeSize[0] < 6 || facadeSize[1] < 6)
 		return 0;
-	// if the images are too small threshold is 25 by 25
-	if (src_img.size().height < 25 || src_img.size().width < 25)
+	// if the images are too small threshold is 20 by 20
+	if (src_img.size().height < 20 || src_img.size().width < 20)
 		return 0;
 	// prepare inputs
 	cv::Mat scale_img;
@@ -974,7 +977,7 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 		std::cout << confidences_tensor.slice(1, 0, 2) << std::endl;
 		std::cout << "Reject class is " << best_class << std::endl;
 	}
-	if (best_class == 1 || best_score < 0.96) // bad facades
+	if (best_class == 1 || best_score < 0.8) // bad facades
 		return 0;
 	else {
 		fi.good_conf = best_score;
