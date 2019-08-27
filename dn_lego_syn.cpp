@@ -1056,7 +1056,12 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	}
 	fi.valid = true;
 	// choose the best chip
-	std::vector<ChipInfo> cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
+	std::vector<ChipInfo> cropped_chips;
+	if(!bground)
+		cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
+	else
+		cropped_chips = crop_chip_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
+
 	int best_chip_id = choose_best_chip(cropped_chips, mi, bDebug, img_filename);
 	// adjust the best chip
 	cv::Mat croppedImage = cropped_chips[best_chip_id].src_image.clone(); 
@@ -1406,7 +1411,7 @@ std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vec
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {
 	double ratio_upper = 0.95;
 	double ratio_lower = 0.05;
-	double ratio_step = 0.1;
+	double ratio_step = 0.05;
 	std::vector<ChipInfo> cropped_chips;
 	double target_width = targetSize[0];
 	double target_height = targetSize[1];
@@ -1459,16 +1464,14 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 		double target_ratio_width = target_width / facadeSize[0];
 		if (target_ratio_width >= 1.0)
 			target_ratio_width = 1.0;
-		if (facadeSize[1] < 1.6 * target_height || !bMultipleChips) {
-			double start_height_ratio = (1 - target_ratio_height);
-			ChipInfo chip;
-			chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
-			chip.x = 0;
-			chip.y = src_facade.size().height * start_height_ratio;
-			chip.width = src_facade.size().width * target_ratio_width;
-			chip.height = src_facade.size().height * target_ratio_height;
-			cropped_chips.push_back(chip);
-		}
+		double start_height_ratio = (1 - target_ratio_height);
+		ChipInfo chip;
+		chip.src_image = src_facade(cv::Rect(0, src_facade.size().height * start_height_ratio, src_facade.size().width * target_ratio_width, src_facade.size().height * target_ratio_height));
+		chip.x = 0;
+		chip.y = src_facade.size().height * start_height_ratio;
+		chip.width = src_facade.size().width * target_ratio_width;
+		chip.height = src_facade.size().height * target_ratio_height;
+		cropped_chips.push_back(chip);
 	}
 	else if (type == 4) {
 		double longer_dim = facadeSize[0] > facadeSize[1] ? facadeSize[0] : facadeSize[1];
