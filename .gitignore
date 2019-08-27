@@ -37,3 +37,6 @@ seg_model_new_aug.pt
 reject_model_classifier_old.pt
 reject_model_classifier_v1.pt
 reject_model_classifier_histeq.pt
+lego_model_classifier_0730.pt
+lego_model_classifier_0824.pt
+lego_model_classifier_res18.pt

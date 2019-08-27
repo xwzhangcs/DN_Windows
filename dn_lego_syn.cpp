@@ -14,8 +14,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_classifier_model("../data/grammar_classifier", mi, true);
-	return 0;
+	/*test_classifier_model("../data/grammar_classifier", mi, true);
+	return 0;*/
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
