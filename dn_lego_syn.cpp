@@ -10,6 +10,8 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	test_old_segmentation("../data/test_old_seg", "../data/test_old_results");
+	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
@@ -519,6 +521,29 @@ void collect_roi_images(std::string images_path, std::string output_path) {
 		cv::rectangle(dnn_img, cv::Point(min_tl_x, min_tl_y), cv::Point(max_br_x, max_br_y), fg_color, -1);
 		cv::imwrite(output_path + "/" + images[i], dnn_img);
 		
+	}
+}
+
+void test_old_segmentation(std::string images_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	cv::Scalar bg_color(255, 0, 0); // white back ground
+	cv::Scalar fg_color(0, 0, 255); // white back ground
+	for (int i = 0; i < images.size(); i++) {
+		std::string image_name = images_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) {// ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		}
+		// load image
+		cv::Mat hsv, dst_ehist, dst_classify;
+		cvtColor(src_img, hsv, cv::COLOR_BGR2HSV);
+		std::vector<cv::Mat> bgr;   //destination array
+		cv::split(hsv, bgr);//split source 
+		for (int i = 0; i < 3; i++)
+			cv::equalizeHist(bgr[i], bgr[i]);
+		dst_ehist = bgr[2];
+		dst_classify = facade_clustering_kkmeans(dst_ehist, 2);
+		cv::imwrite(output_path + "/" + images[i], dst_classify);
 	}
 }
 
@@ -2439,6 +2464,205 @@ bool findIntersection(cv::Rect a1, cv::Rect a2) {
 	if (insideRect(a2, cv::Point(a1.br().x, a1.tl().y)))
 		return true;
 	return false;
+}
+
+cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters) {
+	// Here we declare that our samples will be 2 dimensional column vectors.  
+	// (Note that if you don't know the dimensionality of your vectors at compile time
+	// you can change the 2 to a 0 and then set the size at runtime)
+	typedef matrix<double, 0, 1> sample_type;
+	// Now we are making a typedef for the kind of kernel we want to use.  I picked the
+	// radial basis kernel because it only has one parameter and generally gives good
+	// results without much fiddling.
+	typedef radial_basis_kernel<sample_type> kernel_type;
+
+
+	// Here we declare an instance of the kcentroid object.  It is the object used to 
+	// represent each of the centers used for clustering.  The kcentroid has 3 parameters 
+	// you need to set.  The first argument to the constructor is the kernel we wish to 
+	// use.  The second is a parameter that determines the numerical accuracy with which 
+	// the object will perform part of the learning algorithm.  Generally, smaller values 
+	// give better results but cause the algorithm to attempt to use more dictionary vectors 
+	// (and thus run slower and use more memory).  The third argument, however, is the 
+	// maximum number of dictionary vectors a kcentroid is allowed to use.  So you can use
+	// it to control the runtime complexity.  
+	kcentroid<kernel_type> kc(kernel_type(0.1), 0.01, 16);
+
+	// Now we make an instance of the kkmeans object and tell it to use kcentroid objects
+	// that are configured with the parameters from the kc object we defined above.
+	kkmeans<kernel_type> test(kc);
+
+	std::vector<sample_type> samples;
+	std::vector<sample_type> initial_centers;
+
+	sample_type m(src_img.channels());
+
+	for (int i = 0; i < src_img.size().height; i++) {
+		for (int j = 0; j < src_img.size().width; j++) {
+			if (src_img.channels() == 4) {
+				m(0) = src_img.at<cv::Vec4b>(i, j)[0] * 1.0 / 255;
+				m(1) = src_img.at<cv::Vec4b>(i, j)[1] * 1.0 / 255;
+				m(2) = src_img.at<cv::Vec4b>(i, j)[2] * 1.0 / 255;
+			}
+			else if (src_img.channels() == 3) {
+				m(0) = src_img.at<cv::Vec3b>(i, j)[0] * 1.0 / 255;
+				m(1) = src_img.at<cv::Vec3b>(i, j)[1] * 1.0 / 255;
+				m(2) = src_img.at<cv::Vec3b>(i, j)[2] * 1.0 / 255;
+			}
+			else {
+				m(0) = (int)src_img.at<uchar>(i, j) * 1.0 / 255;
+			}
+			// add this sample to our set of samples we will run k-means 
+			samples.push_back(m);
+		}
+	}
+
+	// tell the kkmeans object we made that we want to run k-means with k set to 3. 
+	// (i.e. we want 3 clusters)
+	test.set_number_of_centers(clusters);
+
+	// You need to pick some initial centers for the k-means algorithm.  So here
+	// we will use the dlib::pick_initial_centers() function which tries to find
+	// n points that are far apart (basically).  
+	pick_initial_centers(clusters, initial_centers, samples, test.get_kernel());
+
+	// now run the k-means algorithm on our set of samples.  
+	test.train(samples, initial_centers);
+
+	std::vector<cv::Scalar> clusters_colors;
+	std::vector<int> clusters_points;
+	clusters_colors.resize(clusters);
+	clusters_points.resize(clusters);
+	for (int i = 0; i < clusters; i++) {
+		clusters_colors[i] = cv::Scalar(0, 0, 0);
+		clusters_points[i] = 0;
+	}
+	int count = 0;
+	// 
+	if (src_img.channels() == 4) {
+		count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += src_img.at<cv::Vec4b>(i, j)[0];
+				clusters_colors[test(samples[count])][1] += src_img.at<cv::Vec4b>(i, j)[1];
+				clusters_colors[test(samples[count])][2] += src_img.at<cv::Vec4b>(i, j)[2];
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+			clusters_colors[i][1] = clusters_colors[i][1] / clusters_points[i];
+			clusters_colors[i][2] = clusters_colors[i][2] / clusters_points[i];
+		}
+	}
+	if (src_img.channels() == 3) {
+		count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += src_img.at<cv::Vec3b>(i, j)[0];
+				clusters_colors[test(samples[count])][1] += src_img.at<cv::Vec3b>(i, j)[1];
+				clusters_colors[test(samples[count])][2] += src_img.at<cv::Vec3b>(i, j)[2];
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+			clusters_colors[i][1] = clusters_colors[i][1] / clusters_points[i];
+			clusters_colors[i][2] = clusters_colors[i][2] / clusters_points[i];
+		}
+	}
+	else if (src_img.channels() == 1) { //gray image
+		int count = 0;
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				clusters_colors[test(samples[count])][0] += (int)src_img.at<uchar>(i, j);
+				clusters_points[test(samples[count])] ++;
+				count++;
+			}
+		}
+		for (int i = 0; i < clusters; i++) {
+			clusters_colors[i][0] = clusters_colors[i][0] / clusters_points[i];
+		}
+	}
+	else {
+		//do nothing
+	}
+	// compute cluster colors
+	int darkest_cluster = -1;
+	cv::Scalar darkest_color(255, 255, 255);
+	for (int i = 0; i < clusters; i++) {
+		//std::cout << "clusters_colors " << i << " is " << clusters_colors[i] << std::endl;
+		if (src_img.channels() == 3 || src_img.channels() == 4) {
+			if (clusters_colors[i][0] < darkest_color[0] && clusters_colors[i][1] < darkest_color[1] && clusters_colors[i][2] < darkest_color[2]) {
+				darkest_color[0] = clusters_colors[i][0];
+				darkest_color[1] = clusters_colors[i][1];
+				darkest_color[2] = clusters_colors[i][2];
+				darkest_cluster = i;
+			}
+		}
+		else {
+			if (clusters_colors[i][0] < darkest_color[0]) {
+				darkest_color[0] = clusters_colors[i][0];
+				darkest_cluster = i;
+			}
+		}
+	}
+	cv::Mat out_img;
+	cv::resize(src_img, out_img, cv::Size(src_img.size().width, src_img.size().height));
+	count = 0;
+	if (src_img.channels() == 1) {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<uchar>(i, j) = (uchar)0;
+				}
+				else {
+					out_img.at<uchar>(i, j) = (uchar)255;
+
+				}
+				count++;
+			}
+		}
+	}
+	else if (src_img.channels() == 3) {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<cv::Vec3b>(i, j)[0] = 0;
+					out_img.at<cv::Vec3b>(i, j)[1] = 0;
+					out_img.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+				else {
+					out_img.at<cv::Vec3b>(i, j)[0] = 255;
+					out_img.at<cv::Vec3b>(i, j)[1] = 255;
+					out_img.at<cv::Vec3b>(i, j)[2] = 255;
+
+				}
+				count++;
+			}
+		}
+	}
+	else {
+		for (int i = 0; i < out_img.size().height; i++) {
+			for (int j = 0; j < out_img.size().width; j++) {
+				if (test(samples[count]) == darkest_cluster) {
+					out_img.at<cv::Vec4b>(i, j)[0] = 0;
+					out_img.at<cv::Vec4b>(i, j)[1] = 0;
+					out_img.at<cv::Vec4b>(i, j)[2] = 0;
+				}
+				else {
+					out_img.at<cv::Vec4b>(i, j)[0] = 255;
+					out_img.at<cv::Vec4b>(i, j)[1] = 255;
+					out_img.at<cv::Vec4b>(i, j)[2] = 255;
+
+				}
+				count++;
+			}
+		}
+	}
+	return out_img;
 }
 
 std::vector<double> grammar1(ModelInfo& mi, std::vector<double> paras, bool bDebug) {
