@@ -10,13 +10,16 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	test_overlay_images("../data/0014/segs_binary", "../data/0014/src", "../data/0014/overlay");
-	return 0;
+	//split_images("../data/0039.png", "../data/split");
+	/*merge_images("../data/split_gray", "../data/merge.png", 379, 80);
+	return 0;*/
+	/*test_overlay_images("../data/0014/segs_binary", "../data/0014/src", "../data/0014/overlay");
+	return 0;*/
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_segmentation_model("../data/0014", mi);
+	test_segmentation_model("../data/0041", mi);
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -46,6 +49,36 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void split_images(std::string image_path, std::string output_path) {
+	cv::Mat src = cv::imread(image_path, CV_LOAD_IMAGE_UNCHANGED);
+	std::vector<int> scan_lines;
+	scan_lines.push_back(0);
+	scan_lines.push_back(90);
+	scan_lines.push_back(190);
+	scan_lines.push_back(280);
+	scan_lines.push_back(src.size().width);
+	std::cout << src.size() << std::endl;
+	for (int i = 0; i < scan_lines.size() - 1; i++) {
+		cv::Mat split_img = src(cv::Rect(scan_lines[i], 0, scan_lines[i + 1] - scan_lines[i], src.size().height));
+		cv::imwrite(output_path + "/" + to_string(i) + ".png", split_img);
+	}
+}
+
+void merge_images(std::string images_path, std::string output_path, int width, int height) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	cv::Mat matDst(cv::Size(width, height), CV_8UC3);
+	int start_x = 0;
+	int start_y = 0;
+	for (int index = 0; index < images.size(); index++) {
+		std::string img_name = images_path + "/" + images[index];
+		std::cout << "img_name is " << img_name << std::endl;
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		src_img.copyTo(matDst(cv::Rect(start_x, start_y, src_img.size().width, src_img.size().height)));
+		start_x += src_img.size().width;
+	}
+	cv::imwrite(output_path, matDst);
 }
 
 void test_color(std::string image_1_path, std::string image_2_path, std::string output_path) {

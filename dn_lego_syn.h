@@ -100,6 +100,8 @@ void test_spacing(std::string images_path, ModelInfo& mi, bool bDebug);
 void test_color(std::string image_1_path, std::string image_2_path, std::string output_path);
 cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters);
 void test_old_segmentation(std::string images_path, std::string output_path);
+void split_images(std::string image_path, std::string output_path);
+void merge_images(std::string images_path, std::string output_path, int width, int height);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
