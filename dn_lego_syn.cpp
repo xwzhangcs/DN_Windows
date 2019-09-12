@@ -10,14 +10,14 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	test_old_segmentation("../data/test_old_seg", "../data/test_old_results");
+	test_overlay_images("../data/0014/segs_binary", "../data/0014/src", "../data/0014/overlay");
 	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	/*test_classifier_model("../data/grammar_classifier", mi, true);
-	return 0;*/
+	test_segmentation_model("../data/0014", mi);
+	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
 		for (int j = 0; j < metaFiles.size(); j++) {
@@ -216,6 +216,8 @@ void test_chip_choose(std::string images_path, std::string output, ModelInfo& mi
 }
 
 void test_segmentation_model(std::string images_path, ModelInfo& mi) {
+	cv::Scalar bg_color(255, 255, 255); // white back ground
+	cv::Scalar window_color(0, 0, 0); // black for windows
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/src");
 	for (int index = 0; index < images.size(); index++) {
 		std::string img_name = images_path + "/src/" + images[index];
@@ -223,11 +225,11 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) // ensure there're 3 channels
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-		int run_times = 1;
+		int run_times = 3;
 		// scale to seg size
 		cv::Mat scale_img;
 		cv::resize(src_img, scale_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
-		if (true) {
+		if (false) {
 			cv::imwrite(images_path + "/A/" + images[index], scale_img);
 		}
 		cv::Mat dnn_img_rgb;
@@ -303,59 +305,113 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 						color_mark[h][w] += 1;
 				}
 			}
-			if (true) {
+			if (false) {
 				cv::cvtColor(resultImg, resultImg, CV_RGB2BGR);
 				cv::imwrite(images_path + "/B/" + images[index], resultImg);
 			}
 		}
-		/*cv::Mat seg_final_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
 		int num_majority = ceil(0.5 * run_times);
 		for (int i = 0; i < color_mark.size(); i++) {
 			for (int j = 0; j < color_mark[i].size(); j++) {
-				if (color_mark[i][j] < num_majority) {
-					seg_final_img.at<cv::Vec3b>(i, j)[0] = 0;
-					seg_final_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_final_img.at<cv::Vec3b>(i, j)[2] = 255;
-				}	
-				else {
-					seg_final_img.at<cv::Vec3b>(i, j)[0] = 255;
-					seg_final_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_final_img.at<cv::Vec3b>(i, j)[2] = 0;
+				if (color_mark[i][j] < num_majority)
+					gray_img.at<uchar>(i, j) = (uchar)0;
+				else
+					gray_img.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		// scale to grammar size
+		cv::Mat chip_seg;
+		cv::resize(gray_img, chip_seg, src_img.size());
+		// correct the color
+		for (int i = 0; i < chip_seg.size().height; i++) {
+			for (int j = 0; j < chip_seg.size().width; j++) {
+				//noise
+				if ((int)chip_seg.at<uchar>(i, j) < 100) {
+					chip_seg.at<uchar>(i, j) = (uchar)0;
+				}
+				else
+					chip_seg.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		std::string output_img_name = "";
+		if(mi.seg_module_type == 0)
+			output_img_name = images_path + "/segs_normal/" + images[index];
+		else if(mi.seg_module_type == 1)
+			output_img_name = images_path + "/segs_histeq/" + images[index];
+		else
+			output_img_name = images_path + "/segs_pan/" + images[index];
+		cv::imwrite(output_img_name, chip_seg);
+		// compute color
+		cv::Scalar bg_avg_color(0, 0, 0);
+		cv::Scalar win_avg_color(0, 0, 0);
+		{
+			int bg_count = 0;
+			int win_count = 0;
+			for (int i = 0; i < chip_seg.size().height; i++) {
+				for (int j = 0; j < chip_seg.size().width; j++) {
+					if ((int)chip_seg.at<uchar>(i, j) == 0) {
+						win_avg_color.val[0] += src_img.at<cv::Vec3b>(i, j)[0];
+						win_avg_color.val[1] += src_img.at<cv::Vec3b>(i, j)[1];
+						win_avg_color.val[2] += src_img.at<cv::Vec3b>(i, j)[2];
+						win_count++;
+					}
+					else {
+						bg_avg_color.val[0] += src_img.at<cv::Vec3b>(i, j)[0];
+						bg_avg_color.val[1] += src_img.at<cv::Vec3b>(i, j)[1];
+						bg_avg_color.val[2] += src_img.at<cv::Vec3b>(i, j)[2];
+						bg_count++;
+					}
 				}
 			}
-		}*/
-		//cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
-		//int num_majority = ceil(0.5 * run_times);
-		//for (int i = 0; i < color_mark.size(); i++) {
-		//	for (int j = 0; j < color_mark[i].size(); j++) {
-		//		if (color_mark[i][j] < num_majority)
-		//			gray_img.at<uchar>(i, j) = (uchar)0;
-		//		else
-		//			gray_img.at<uchar>(i, j) = (uchar)255;
-		//	}
-		//}
-		//// scale to grammar size
-		//cv::Mat chip_seg;
-		//cv::resize(gray_img, chip_seg, src_img.size());
-		//// correct the color
-		//for (int i = 0; i < chip_seg.size().height; i++) {
-		//	for (int j = 0; j < chip_seg.size().width; j++) {
-		//		//noise
-		//		if ((int)chip_seg.at<uchar>(i, j) < 128) {
-		//			chip_seg.at<uchar>(i, j) = (uchar)0;
-		//		}
-		//		else
-		//			chip_seg.at<uchar>(i, j) = (uchar)255;
-		//	}
-		//}
-		//std::string output_img_name = "";
-		//if(mi.seg_module_type == 0)
-		//	output_img_name = "../data/segs_normal/" + images[index];
-		//else if(mi.seg_module_type == 1)
-		//	output_img_name = "../data/segs_histeq/" + images[index];
-		//else
-		//	output_img_name = "../data/segs_pan/" + images[index];
-		//cv::imwrite(output_img_name, chip_seg);
+			if (win_count > 0) {
+				win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+				win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+				win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+			}
+			if (bg_count > 0) {
+				bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+				bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+				bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+			}
+		}
+
+
+		// add padding
+		int padding_size = mi.paddingSize[0];
+		int borderType = cv::BORDER_CONSTANT;
+		cv::Mat aligned_img_padding;
+		cv::copyMakeBorder(chip_seg, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, bg_color);
+		// bbox and color
+		std::vector<std::vector<cv::Point> > contours;
+		std::vector<cv::Vec4i> hierarchy;
+		cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, cv::Point(0, 0));
+
+		std::vector<float> area_contours(contours.size());
+		std::vector<cv::Rect> boundRect(contours.size());
+		std::vector<cv::Scalar> colors(contours.size());
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+			area_contours[i] = cv::contourArea(contours[i]);
+		}
+		cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_avg_color);
+		cv::Mat dnn_img_binary = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
+		for (int i = 0; i < contours.size(); i++)
+		{
+			if (hierarchy[i][3] != 0) continue;
+			if (area_contours[i] < 15)
+				continue;
+			//cv::drawContours(dnn_img, contours, i, cv::Scalar(0, 0, 0), 1, 8, hierarchy, 0, cv::Point());
+			cv::rectangle(dnn_img_binary, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x - 1, boundRect[i].br().y - 1), window_color, -1);
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x - 1, boundRect[i].br().y - 1), win_avg_color, -1);
+		}
+		dnn_img = dnn_img(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
+		dnn_img_binary = dnn_img_binary(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
+		std::string output_name = images_path + "/segs_color/" + images[index];
+		cv::imwrite(output_name, dnn_img);
+		output_name = images_path + "/segs_binary/" + images[index];
+		cv::imwrite(output_name, dnn_img_binary);
 	}
 }
 
@@ -464,7 +520,7 @@ void test_overlay_images(std::string image_1_path, std::string image_2_path, std
 			cv::cvtColor(src_2, src_2, CV_BGR2BGRA);
 		if (src_2.channels() == 1)
 			cv::cvtColor(src_2, src_2, CV_GRAY2BGRA);
-		double alpha = 0.8; double beta;
+		double alpha = 0.3; double beta;
 		beta = (1.0 - alpha);
 		cv::Mat dst;
 		cv::addWeighted(src_1, alpha, src_2, beta, 0.0, dst);
