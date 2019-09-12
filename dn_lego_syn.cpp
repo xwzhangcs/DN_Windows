@@ -10,16 +10,17 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//split_images("../data/0039.png", "../data/split");
-	/*merge_images("../data/split_gray", "../data/merge.png", 379, 80);
+	/*split_images("../data/0039.png", "../data/split");
 	return 0;*/
-	/*test_overlay_images("../data/0014/segs_binary", "../data/0014/src", "../data/0014/overlay");
+	/*merge_images("../data/split_normal", "../data/merge.png", 379, 80);
 	return 0;*/
+	test_overlay_images("../data/0041/segs_binary", "../data/0041/src", "../data/0041/overlay");
+	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_segmentation_model("../data/0041", mi);
+	test_segmentation_model("../data/0014", mi);
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -68,7 +69,7 @@ void split_images(std::string image_path, std::string output_path) {
 
 void merge_images(std::string images_path, std::string output_path, int width, int height) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
-	cv::Mat matDst(cv::Size(width, height), CV_8UC3);
+	cv::Mat matDst(cv::Size(width, height), CV_8UC1);
 	int start_x = 0;
 	int start_y = 0;
 	for (int index = 0; index < images.size(); index++) {
@@ -375,6 +376,7 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		else
 			output_img_name = images_path + "/segs_pan/" + images[index];
 		cv::imwrite(output_img_name, chip_seg);
+		continue;
 		// compute color
 		cv::Scalar bg_avg_color(0, 0, 0);
 		cv::Scalar win_avg_color(0, 0, 0);
@@ -553,7 +555,7 @@ void test_overlay_images(std::string image_1_path, std::string image_2_path, std
 			cv::cvtColor(src_2, src_2, CV_BGR2BGRA);
 		if (src_2.channels() == 1)
 			cv::cvtColor(src_2, src_2, CV_GRAY2BGRA);
-		double alpha = 0.3; double beta;
+		double alpha = 0.2; double beta;
 		beta = (1.0 - alpha);
 		cv::Mat dst;
 		cv::addWeighted(src_1, alpha, src_2, beta, 0.0, dst);
