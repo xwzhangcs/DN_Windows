@@ -14,13 +14,15 @@ int main(int argc, const char* argv[]) {
 	return 0;*/
 	/*merge_images("../data/split_normal", "../data/merge.png", 379, 80);
 	return 0;*/
-	test_overlay_images("../data/0041/segs_binary", "../data/0041/src", "../data/0041/overlay");
-	return 0;
+	/*test_overlay_images("../data/0041/segs_binary", "../data/0041/src", "../data/0041/overlay");
+	return 0;*/
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_segmentation_model("../data/0014", mi);
+	std::string cluster = "../data/0911/worse/0098";
+	test_segmentation_model(cluster, mi);
+	test_overlay_images(cluster + "/segs_binary", cluster + "/src", cluster + "/overlay");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -376,7 +378,6 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		else
 			output_img_name = images_path + "/segs_pan/" + images[index];
 		cv::imwrite(output_img_name, chip_seg);
-		continue;
 		// compute color
 		cv::Scalar bg_avg_color(0, 0, 0);
 		cv::Scalar win_avg_color(0, 0, 0);
