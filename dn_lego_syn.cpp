@@ -11,9 +11,12 @@ int main(int argc, const char* argv[]) {
 		return -1;
 	}
 	std::string aoi = "../data/example/D3";
+	FacadeSeg eval_obj;
+	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/eval.txt");
+	/*std::string aoi = "../data/example/D3";
 	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
 	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
-	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");
+	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");*/
 	return 0;
 	/*split_images("../data/0039.png", "../data/split");
 	return 0;*/
