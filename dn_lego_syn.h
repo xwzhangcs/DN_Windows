@@ -102,6 +102,8 @@ cv::Mat facade_clustering_kkmeans(cv::Mat src_img, int clusters);
 void test_old_segmentation(std::string images_path, std::string output_path);
 void split_images(std::string image_path, std::string output_path);
 void merge_images(std::string images_path, std::string output_path, int width, int height);
+void adjust_seg_colors(std::string image_path, std::string output_path);
+void conver2seg(std::string image_path, std::string output_path);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);

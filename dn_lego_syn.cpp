@@ -10,6 +10,11 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	std::string aoi = "../data/example/D3";
+	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
+	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
+	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");
+	return 0;
 	/*split_images("../data/0039.png", "../data/split");
 	return 0;*/
 	/*merge_images("../data/split_normal", "../data/merge.png", 379, 80);
@@ -20,9 +25,9 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	std::string cluster = "../data/0911/worse/0098";
+	std::string cluster = "../data/deepFill_out/D7_out";
 	test_segmentation_model(cluster, mi);
-	test_overlay_images(cluster + "/segs_binary", cluster + "/src", cluster + "/overlay");
+	//test_overlay_images(cluster + "/segs_binary", cluster + "/src", cluster + "/overlay");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -52,6 +57,94 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void adjust_seg_colors(std::string image_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(image_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = image_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		cv::Mat out = src_img.clone();
+		for (int h = 0; h < src_img.size().height; h++) {
+			for (int w = 0; w < src_img.size().width; w++) {
+				if (src_img.at<cv::Vec3b>(h, w)[0] > 200 || src_img.at<cv::Vec3b>(h, w)[1] > 0) {
+					out.at<cv::Vec3b>(h, w)[0] = 255;
+					out.at<cv::Vec3b>(h, w)[1] = 0;
+					out.at<cv::Vec3b>(h, w)[2] = 0;
+				}
+				else {
+					out.at<cv::Vec3b>(h, w)[0] = 0;
+					out.at<cv::Vec3b>(h, w)[1] = 0;
+					out.at<cv::Vec3b>(h, w)[2] = 255;
+				}
+			}
+		}
+		cv::imwrite(output_path + '/' + images[i], out);
+	}
+}
+
+void conver2seg(std::string image_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(image_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = image_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		cv::Mat src_gray;
+		cv::cvtColor(src_img, src_gray, CV_BGR2GRAY);
+		// only 2 colors
+		int color_1 = (int)src_gray.at<uchar>(0, 0);
+		int color_2 = 0;
+		int bFind = false;
+		for (int h = 0; h < src_img.size().height; h++) {
+			if (bFind)
+				break;
+			for (int w = 0; w < src_img.size().width; w++) {
+				color_2 = (int)src_gray.at<uchar>(h, w);
+				if (color_2 != color_1) {
+					bFind = true;
+					break;
+				}
+			}
+		}
+		bool bFirst = false;
+		if (color_2 < color_1)
+			bFirst = true;
+		cv::Mat out = src_img.clone();
+		for (int h = 0; h < src_img.size().height; h++) {
+			for (int w = 0; w < src_img.size().width; w++) {
+				if (bFirst) {
+					if ((int)src_gray.at<uchar>(h, w) == color_1) {
+						out.at<cv::Vec3b>(h, w)[0] = 255;
+						out.at<cv::Vec3b>(h, w)[1] = 0;
+						out.at<cv::Vec3b>(h, w)[2] = 0;
+					}
+					else {
+						out.at<cv::Vec3b>(h, w)[0] = 0;
+						out.at<cv::Vec3b>(h, w)[1] = 0;
+						out.at<cv::Vec3b>(h, w)[2] = 255;
+					}
+				}
+				else {
+					if ((int)src_gray.at<uchar>(h, w) == color_1) {
+						out.at<cv::Vec3b>(h, w)[0] = 0;
+						out.at<cv::Vec3b>(h, w)[1] = 0;
+						out.at<cv::Vec3b>(h, w)[2] = 255;
+					}
+					else {
+						out.at<cv::Vec3b>(h, w)[0] = 255;
+						out.at<cv::Vec3b>(h, w)[1] = 0;
+						out.at<cv::Vec3b>(h, w)[2] = 0;
+					}
+				}
+			}
+		}
+		cv::imwrite(output_path + '/' + images[i], out);
+	}
 }
 
 void split_images(std::string image_path, std::string output_path) {
