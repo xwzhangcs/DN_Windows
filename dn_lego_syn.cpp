@@ -10,20 +10,22 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	std::string aoi = "../data/example/D3";
+	findPatches("../data/0014_0043.png", "../data/patches", 20);
+	/*std::string aoi = "../data/example/D3";
 	FacadeSeg eval_obj;
-	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/eval.txt");
+	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/eval.txt");*/
 	/*std::string aoi = "../data/example/D3";
 	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
 	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
-	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");*/
-	return 0;
+	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");
+	std::string aoi = "../data/example/D3";*/
 	/*split_images("../data/0039.png", "../data/split");
 	return 0;*/
 	/*merge_images("../data/split_normal", "../data/merge.png", 379, 80);
 	return 0;*/
 	/*test_overlay_images("../data/0041/segs_binary", "../data/0041/src", "../data/0041/overlay");
 	return 0;*/
+	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
@@ -60,6 +62,46 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void findPatches(std::string image_name, std::string output_path, int step) {
+	cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
+	std::vector<cv::Rect> rectangles;
+	int w_count = src_img.size().width / step;
+	int h_count = src_img.size().height / step;
+	int start_x = 0.5 * (src_img.size().width - w_count * step);
+	int start_y = 0.5 * (src_img.size().height - h_count * step);
+	std::cout << "w_count is " << w_count << std::endl;
+	std::cout << "h_count is " << h_count << std::endl;
+	std::cout << "start_x is " << start_x << std::endl;
+	std::cout << "start_y is " << start_y << std::endl;
+	for (int i = 0; i < w_count; i++) {
+		for (int j = 0; j < h_count; j++) {
+			cv::Point center(start_x + i * step + 0.5 * step, start_y + j * step + 0.5 * step);
+			std::cout << "center is " << center << std::endl;
+			for (int width = step; width <= 3 * step; width += 0.5 * step) {
+				for (int height = step; height <= 3 * step; height += 0.5 * step) {
+					cv::Point l1(center.x - 0.5 * width, center.y - 0.5 * height);
+					cv::Point r1(center.x + 0.5 * width, center.y + 0.5 * height);
+					if (l1.x < 0 || l1.y < 0)
+						continue;
+					if (r1.x > src_img.size().width || r1.y > src_img.size().height)
+						continue;
+					cv::Rect tmp = cv::Rect(l1, cv::Size2f(width, height));
+					rectangles.push_back(tmp);
+				}
+			}
+		}
+	}
+	// test
+	cv::RNG rng(12345);
+	cv::Mat drawing = src_img.clone();
+	for (int index = 0; index < rectangles.size(); index++)
+	{
+		cv::Scalar color = cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+		cv::rectangle(drawing, rectangles[index], color, 1, 8);
+	}
+	cv::imwrite("../data/patch.png", drawing);
 }
 
 void adjust_seg_colors(std::string image_path, std::string output_path) {
