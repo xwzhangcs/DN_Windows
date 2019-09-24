@@ -10,15 +10,16 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	findPatches("../data/0014_0043.png", "../data/patches", 20);
-	/*std::string aoi = "../data/example/D3";
+	//findPatches("../data/0014_0043.png", "../data/patches", 20);
+	std::string aoi = "../data/example/D4";
 	FacadeSeg eval_obj;
-	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/eval.txt");*/
-	/*std::string aoi = "../data/example/D3";
+	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/pix2pix_eval.txt");
+	eval_obj.eval(aoi + "/seg_deepFill_out", aoi + "/gt_out", aoi + "/deepFill_eval.txt");
+	eval_obj.eval(aoi + "/seg_lego_out", aoi + "/gt_out", aoi + "/our_eval.txt");
+	/*std::string aoi = "../data/example/D4";
 	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
 	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
-	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");
-	std::string aoi = "../data/example/D3";*/
+	conver2seg(aoi + "/seg_deepFill", aoi + "/seg_deepFill_out");*/
 	/*split_images("../data/0039.png", "../data/split");
 	return 0;*/
 	/*merge_images("../data/split_normal", "../data/merge.png", 379, 80);
