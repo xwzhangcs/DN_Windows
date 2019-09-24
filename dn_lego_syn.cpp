@@ -10,12 +10,18 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	std::vector<double> paras;
+	paras.push_back(0.4968);
+	paras.push_back(0.2367);
+	paras.push_back(0.7326);
+	paras.push_back(0.6217);
+	generate_synFacade("../data/test/0053_0007.png", paras, "0053_0007.png");
 	//findPatches("../data/0014_0043.png", "../data/patches", 20);
-	std::string aoi = "../data/example/D4";
+	/*std::string aoi = "../data/example/D4";
 	FacadeSeg eval_obj;
 	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/pix2pix_eval.txt");
 	eval_obj.eval(aoi + "/seg_deepFill_out", aoi + "/gt_out", aoi + "/deepFill_eval.txt");
-	eval_obj.eval(aoi + "/seg_lego_out", aoi + "/gt_out", aoi + "/our_eval.txt");
+	eval_obj.eval(aoi + "/seg_lego_out", aoi + "/gt_out", aoi + "/our_eval.txt");*/
 	/*std::string aoi = "../data/example/D4";
 	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
 	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
@@ -63,6 +69,42 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name){
+	cv::Mat src_img = cv::imread(src_image_name, CV_LOAD_IMAGE_UNCHANGED);
+	// default setting
+	// range of Rows
+	std::pair<int, int> imageRows(2, 10);
+	// range of Cols
+	std::pair<int, int> imageCols(2, 10);
+	// relativeWidth
+	std::pair<double, double> imageRelativeWidth(0.3, 0.8);
+	// relativeHeight
+	std::pair<double, double> imageRelativeHeight(0.3, 0.8);
+	int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
+	if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.9)
+		img_rows++;
+	int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
+	if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.9)
+		img_cols++;
+	int img_groups = 1;
+	double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
+	double relative_height = paras[3] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
+	if (true) {
+		std::cout << "img_rows is " << paras[0] * (imageRows.second - imageRows.first) + imageRows.first << std::endl;
+		std::cout << "img_cols is " << paras[1] * (imageCols.second - imageCols.first) + imageCols.first << std::endl;
+	}
+	std::vector<double> results;
+	results.push_back(img_rows);
+	results.push_back(img_cols);
+	results.push_back(img_groups);
+	results.push_back(relative_width);
+	results.push_back(relative_height);
+	cv::Scalar win_avg_color(0, 0, 255, 0);
+	cv::Scalar bg_avg_color(255, 0, 0, 0);
+	synthesis(results, src_img.size(), "../data/test_sync", win_avg_color, bg_avg_color, true, out_image_name);
+
 }
 
 void findPatches(std::string image_name, std::string output_path, int step) {
