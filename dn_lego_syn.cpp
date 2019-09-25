@@ -10,12 +10,6 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	std::vector<double> paras;
-	paras.push_back(0.4968);
-	paras.push_back(0.2367);
-	paras.push_back(0.7326);
-	paras.push_back(0.6217);
-	generate_synFacade("../data/test/0053_0007.png", paras, "0053_0007.png");
 	//findPatches("../data/0014_0043.png", "../data/patches", 20);
 	/*std::string aoi = "../data/example/D4";
 	FacadeSeg eval_obj;
@@ -32,14 +26,11 @@ int main(int argc, const char* argv[]) {
 	return 0;*/
 	/*test_overlay_images("../data/0041/segs_binary", "../data/0041/src", "../data/0041/overlay");
 	return 0;*/
-	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	std::string cluster = "../data/deepFill_out/D7_out";
-	test_segmentation_model(cluster, mi);
-	//test_overlay_images(cluster + "/segs_binary", cluster + "/src", cluster + "/overlay");
+	test_seg2grammars(mi, "../data/test_seg2grammar", "../data/test_seg2grammar_out");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -62,6 +53,8 @@ int main(int argc, const char* argv[]) {
 				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
 					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
 					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
+					std::string img_name = fi.imgName;
+					cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
 					synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
 				}
 			}
@@ -69,6 +62,164 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(image_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int i = 0; i < images.size(); i++) {
+		std::string img_name = image_path + '/' + images[i];
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		// default size for NN
+		int width = mi.defaultSize[0] - 2 * mi.paddingSize[0];
+		int height = mi.defaultSize[1] - 2 * mi.paddingSize[1];
+		cv::Scalar bg_color(255, 255, 255); // white back ground
+		cv::Scalar window_color(0, 0, 0); // black for windows
+		cv::Mat scale_img;
+		cv::resize(src_img, scale_img, cv::Size(width, height));
+		// correct the color
+		for (int i = 0; i < scale_img.size().height; i++) {
+			for (int j = 0; j < scale_img.size().width; j++) {
+				//noise
+				if ((int)scale_img.at<uchar>(i, j) < 128) {
+					scale_img.at<uchar>(i, j) = (uchar)0;
+				}
+				else
+					scale_img.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		// dilate to remove noises
+		int dilation_type = cv::MORPH_RECT;
+		cv::Mat dilation_dst;
+		int kernel_size = 3;
+		cv::Mat element = cv::getStructuringElement(dilation_type, cv::Size(kernel_size, kernel_size), cv::Point(kernel_size / 2, kernel_size / 2));
+		/// Apply the dilation operation
+		cv::dilate(scale_img, dilation_dst, element);
+		// alignment
+		cv::Mat aligned_img = deSkewImg(dilation_dst);
+		// add padding
+		int padding_size = mi.paddingSize[0];
+		int borderType = cv::BORDER_CONSTANT;
+		cv::Mat aligned_img_padding;
+		cv::copyMakeBorder(aligned_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, bg_color);
+
+		// find contours
+		std::vector<std::vector<cv::Point> > contours;
+		std::vector<cv::Vec4i> hierarchy;
+		cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+		std::vector<cv::Rect> boundRect(contours.size());
+
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+		}	
+		//
+		cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, bg_color);
+		for (int i = 1; i< contours.size(); i++)
+		{
+			if (hierarchy[i][3] != 0) continue;
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x, boundRect[i].tl().y), cv::Point(boundRect[i].br().x, boundRect[i].br().y), window_color, -1);
+		}
+		//
+		int num_classes = mi.number_grammars;
+		// 
+		std::vector<int> separation_x;
+		std::vector<int> separation_y;
+		cv::Mat spacing_img = dnn_img.clone();
+		find_spacing(spacing_img, separation_x, separation_y, true);
+		int spacing_r = separation_y.size() / 2;
+		int spacing_c = separation_x.size() / 2;
+
+		cv::Mat dnn_img_rgb;
+		cv::cvtColor(dnn_img.clone(), dnn_img_rgb, CV_BGR2RGB);
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+		img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+		img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+
+		int best_class = -1;
+		std::vector<double> confidence_values;
+		confidence_values.resize(num_classes);
+		if (true)
+		{
+			// Deserialize the ScriptModule from a file using torch::jit::load().
+			torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+			//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
+
+			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+			std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
+
+			double best_score = 0;
+			for (int i = 0; i < num_classes; i++) {
+				double tmp = confidences_tensor.slice(1, i, i + 1).item<float>();
+				confidence_values[i] = tmp;
+				if (tmp > best_score) {
+					best_score = tmp;
+					best_class = i;
+				}
+			}
+			best_class = best_class + 1;
+			std::cout << "DNN class is " << best_class << std::endl;
+		}
+		// choose conresponding estimation DNN
+		// number of paras
+		int num_paras = mi.grammars[best_class - 1].number_paras;
+
+		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
+		std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
+		std::vector<double> paras;
+		for (int i = 0; i < num_paras; i++) {
+			paras.push_back(out_tensor_grammar.slice(1, i, i + 1).item<float>());
+		}
+		for (int i = 0; i < num_paras; i++) {
+			if (paras[i] < 0)
+				paras[i] = 0;
+		}
+
+		std::vector<double> predictions;
+		if (best_class == 1) {
+			predictions = grammar1(mi, paras, true);
+		}
+		else if (best_class == 2) {
+			predictions = grammar2(mi, paras, true);
+		}
+		else if (best_class == 3) {
+			predictions = grammar3(mi, paras, true);
+		}
+		else if (best_class == 4) {
+			predictions = grammar4(mi, paras, true);
+		}
+		else if (best_class == 5) {
+			predictions = grammar5(mi, paras, true);
+		}
+		else if (best_class == 6) {
+			predictions = grammar6(mi, paras, true);
+		}
+		else {
+			//do nothing
+			predictions = grammar1(mi, paras, true);
+		}
+		if (best_class % 2 == 0) {
+			if (abs(predictions[0] + 1 - spacing_r) <= 1 && predictions[0] > 1)
+				predictions[0] = spacing_r - 1;
+		}
+		else {
+			if (abs(predictions[0] - spacing_r) <= 1 && predictions[0] > 1)
+				predictions[0] = spacing_r;
+		}
+		if (abs(predictions[1] - spacing_c) <= 1 && predictions[1] > 1)
+			predictions[1] = spacing_c;
+		cv::Scalar win_avg_color(0, 0, 255, 0);
+		cv::Scalar bg_avg_color(255, 0, 0, 0);
+		synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);
+	}
 }
 
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name){
@@ -1321,6 +1472,7 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	int type = 0;
 	if(!broof)
 		type = reject(src_facade, fi, mi, mi.debug);
+	type = 1;
 	if (type == 0) {
 		fi.valid = false;
 		// compute avg color

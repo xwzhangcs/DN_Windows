@@ -105,6 +105,7 @@ void merge_images(std::string images_path, std::string output_path, int width, i
 void adjust_seg_colors(std::string image_path, std::string output_path);
 void conver2seg(std::string image_path, std::string output_path);
 void findPatches(std::string image_name, std::string output_path, int step);
+void test_seg2grammars(ModelInfo& mi, std::string image_name, std::string output_path);
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name);
 
 
