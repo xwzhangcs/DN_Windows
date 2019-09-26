@@ -78,10 +78,10 @@ namespace util {
 		}
 		fclose(fp);
 		int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 			img_rows++;
 		int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
-		if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 			img_cols++;
 		int img_groups = 1;
 		double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
@@ -141,14 +141,14 @@ namespace util {
 		}
 		fclose(fp);
 		int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 			img_rows++;
 		int img_cols = paras[1] * (imageCols.second - imageCols.first) + imageCols.first;
-		if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		if (paras[1] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 			img_cols++;
 		int img_groups = 1;
 		int img_doors = paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-		if (paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		if (paras[2] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 			img_doors++;
 		double relative_width = paras[3] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 		double relative_height = paras[4] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
@@ -188,7 +188,7 @@ namespace util {
 		fclose(fp);
 		int img_rows = 1;
 		int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
-		if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 			img_cols++;
 		int img_groups = 1;
 		double relative_width = paras[1] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
@@ -239,11 +239,11 @@ namespace util {
 		fclose(fp);
 		int img_rows = 1;;
 		int img_cols = paras[0] * (imageCols.second - imageCols.first) + imageCols.first;
-		if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.7)
+		if (paras[0] * (imageCols.second - imageCols.first) + imageCols.first - img_cols > 0.8)
 			img_cols++;
 		int img_groups = 1;
 		int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-		if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 			img_doors++;
 		double relative_width = paras[2] * (imageRelativeWidth.second - imageRelativeWidth.first) + imageRelativeWidth.first;
 		double relative_height = 1.0;
@@ -282,7 +282,7 @@ namespace util {
 		}
 		fclose(fp);
 		int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 			img_rows++;
 		int img_cols = 1;
 		int img_groups = 1;
@@ -333,12 +333,12 @@ namespace util {
 		}
 		fclose(fp);
 		int img_rows = paras[0] * (imageRows.second - imageRows.first) + imageRows.first;
-		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.7)
+		if (paras[0] * (imageRows.second - imageRows.first) + imageRows.first - img_rows > 0.8)
 			img_rows++;
 		int img_cols = 1;
 		int img_groups = 1;
 		int img_doors = paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first;
-		if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.7)
+		if (paras[1] * (imageDoors.second - imageDoors.first) + imageDoors.first - img_doors > 0.8)
 			img_doors++;
 		double relative_width = 1.0;
 		double relative_height = paras[2] * (imageRelativeHeight.second - imageRelativeHeight.first) + imageRelativeHeight.first;
@@ -354,6 +354,53 @@ namespace util {
 		results.push_back(relative_door_width);
 		results.push_back(relative_door_height);
 		return results;
+	}
+
+	std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img) {
+		int gt_p = 0;
+		int seg_tp = 0;
+		int seg_fn = 0;
+		int gt_n = 0;
+		int seg_tn = 0;
+		int seg_fp = 0;
+		for (int i = 0; i < gt_img.size().height; i++) {
+			for (int j = 0; j < gt_img.size().width; j++) {
+				// wall
+				if (gt_img.at<cv::Vec3b>(i, j)[0] == 0 && gt_img.at<cv::Vec3b>(i, j)[1] == 0 && gt_img.at<cv::Vec3b>(i, j)[2] == 255) {
+					gt_p++;
+					if (seg_img.at<cv::Vec3b>(i, j)[0] == 0 && seg_img.at<cv::Vec3b>(i, j)[1] == 0 && seg_img.at<cv::Vec3b>(i, j)[2] == 255) {
+						seg_tp++;
+					}
+					else
+						seg_fn++;
+				}
+				else {// non-wall
+					gt_n++;
+					if (seg_img.at<cv::Vec3b>(i, j)[0] == 255 && seg_img.at<cv::Vec3b>(i, j)[1] == 0 && seg_img.at<cv::Vec3b>(i, j)[2] == 0) {
+						seg_tn++;
+					}
+					else
+						seg_fp++;
+				}
+			}
+		}
+		// return pixel accuracy and class accuracy
+		std::vector<double> eval_metrix;
+		// accuracy 
+		eval_metrix.push_back(1.0 * (seg_tp + seg_tn) / (gt_p + gt_n));
+		// precision
+		double precision = 1.0 * seg_tp / (seg_tp + seg_fp);
+		// recall
+		double recall = 1.0 * seg_tp / (seg_tp + seg_fn);
+		eval_metrix.push_back(precision);
+		eval_metrix.push_back(recall);
+		/*std::cout << "P = " << gt_p << std::endl;
+		std::cout << "N = " << gt_n << std::endl;
+		std::cout << "TP = " << seg_tp << std::endl;
+		std::cout << "FN = " << seg_fn << std::endl;
+		std::cout << "TN = " << seg_tn << std::endl;
+		std::cout << "FP = " << seg_fp << std::endl;*/
+		return eval_metrix;
 	}
 
 	cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight) {
@@ -407,6 +454,47 @@ namespace util {
 						cv::rectangle(result, cv::Point(std::round(g_x1), std::round(g_y1)), cv::Point(std::round(g_x2), std::round(g_y2)), window_color, thickness);
 					}
 				}
+			}
+		}
+		return result;
+	}
+
+	cv::Mat generateFacadeSynImage_new(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight, double margin_t, double margin_b, double margin_l, double margin_r) {
+		cv::Scalar bg_color(255, 255, 255); // white back ground
+		cv::Scalar window_color(0, 0, 0); // black for windows
+		int NR = imageRows;
+		int NC = imageCols;
+		int NG = imageGroups;
+		double ratioWidth = imageRelativeWidth;
+		double ratioHeight = imageRelativeHeight;
+		int thickness = -1;
+		cv::Mat result(height, width, CV_8UC3, bg_color);
+		int height_valid = height - margin_t * height - margin_b * height;
+		int width_valid = width - margin_l * width - margin_r * width;
+		double FH = height_valid * 1.0 / NR;
+		double FW = width_valid * 1.0 / NC;
+		double WH = FH * ratioHeight;
+		double WW = FW * ratioWidth;
+		if (NC > 1)
+			FW = WW + (width_valid - WW * NC) / (NC - 1);
+		if (NR > 1)
+			FH = WH + (height_valid - WH * NR) / (NR - 1);
+		/*std::cout << "NR is " << NR << std::endl;
+		std::cout << "NC is " << NC << std::endl;
+		std::cout << "FH is " << FH << std::endl;
+		std::cout << "FW is " << FW << std::endl;
+		std::cout << "ratioWidth is " << ratioWidth << std::endl;
+		std::cout << "ratioHeight is " << ratioHeight << std::endl;
+		std::cout << "WH is " << WH << std::endl;
+		std::cout << "WW is " << WW << std::endl;*/
+		// draw facade image
+		for (int i = 0; i < NR; ++i) {
+			for (int j = 0; j < NC; ++j) {
+				float x1 = FW * j + margin_l * width;
+				float y1 = FH * i + margin_t * height;
+				float x2 = x1 + WW;
+				float y2 = y1 + WH;
+				cv::rectangle(result, cv::Point(std::round(x1), std::round(y1)), cv::Point(std::round(x2), std::round(y2)), window_color, thickness);
 			}
 		}
 		return result;
@@ -495,6 +583,57 @@ namespace util {
 				cv::rectangle(result, cv::Point(std::round(x1), std::round(y1)), cv::Point(std::round(x2), std::round(y2)), window_color, thickness);
 			}
 		}
+		return result;
+	}
+
+	cv::Mat generateFacadeSynImage_new(int width, int height, int imageRows, int imageCols, int imageGroups, int imageDoors, double imageRelativeWidth, double imageRelativeHeight, double imageRelativeDWidth, double imageRelativeDHeight, double margin_t, double margin_b, double margin_l, double margin_r, double margin_d) {
+		cv::Scalar bg_color(255, 255, 255); // white back ground
+		cv::Scalar window_color(0, 0, 0); // black for windows
+		int NR = imageRows;
+		int NG = imageGroups;
+		int NC = imageCols;
+		int ND = imageDoors;
+		double ratioWidth = imageRelativeWidth;
+		double ratioHeight = imageRelativeHeight;
+		double ratioDWidth = imageRelativeDWidth;
+		double ratioDHeight = imageRelativeDHeight;
+		int thickness = -1;
+		cv::Mat result(height, width, CV_8UC3, bg_color);
+		int width_valid = width - margin_l * width - margin_r * width;
+		double DFW = width_valid * 1.0 / ND;
+		double DFH = height * ratioDHeight;
+		double DW = DFW * ratioDWidth;
+		double DH = height * ratioDHeight;
+		if (ND > 1)
+			DFW = DW + (width_valid - DW * ND) / (ND - 1);
+		int height_valid = height - margin_t * height - margin_b * height - margin_d * height - DFH;
+		double FH = height_valid * 1.0 / NR;
+		double FW = width_valid * 1.0 / NC;
+		double WH = FH * ratioHeight;
+		double WW = FW * ratioWidth;
+		if (NC > 1)
+			FW = WW + (width_valid - WW * NC) / (NC - 1);
+		if (NR > 1)
+			FH = WH + (height_valid - WH * NR) / (NR - 1);
+		// windows
+		for (int i = 0; i < NR; ++i) {
+			for (int j = 0; j < NC; ++j) {
+				float x1 = FW * j + margin_l * width;;
+				float y1 = FH * i + margin_t * height;
+				float x2 = x1 + WW;
+				float y2 = y1 + WH;
+				cv::rectangle(result, cv::Point(std::round(x1), std::round(y1)), cv::Point(std::round(x2), std::round(y2)), window_color, thickness);
+			}
+		}
+		// doors
+		for (int i = 0; i < ND; i++) {
+			float x1 = DFW * i + margin_l * width;
+			float y1 = height - DH - margin_b * height;
+			float x2 = x1 + DW;
+			float y2 = y1 + DH;
+			cv::rectangle(result, cv::Point(std::round(x1), std::round(y1)), cv::Point(std::round(x2), std::round(y2)), window_color, thickness);
+		}
+
 		return result;
 	}
 

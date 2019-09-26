@@ -16,6 +16,7 @@ namespace util {
 	std::vector<double> read1DArray(const rapidjson::Value& node, const char* key);
 	bool readBoolValue(const rapidjson::Value& node, const char* key, bool default_value);
 	std::string readStringValue(const rapidjson::Value& node, const char* key);
+	std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img);
 	//grammars
 	std::vector<double> grammar1(std::string modeljson, std::vector<double> paras, bool bDebug);
 	std::vector<double> grammar2(std::string modeljson, std::vector<double> paras, bool bDebug);
@@ -27,4 +28,6 @@ namespace util {
 	cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight);
 	cv::Mat generateFacadeSynImage(int width, int height, int imageRows, int imageCols, int imageGroups, int imageDoors, double imageRelativeWidth, double imageRelativeHeight, double imageRelativeDWidth, double imageRelativeDHeight);
 
+	cv::Mat generateFacadeSynImage_new(int width, int height, int imageRows, int imageCols, int imageGroups, double imageRelativeWidth, double imageRelativeHeight, double margin_t, double margin_b, double margin_l, double margin_r);
+	cv::Mat generateFacadeSynImage_new(int width, int height, int imageRows, int imageCols, int imageGroups, int imageDoors, double imageRelativeWidth, double imageRelativeHeight, double imageRelativeDWidth, double imageRelativeDHeight, double margin_t, double margin_b, double margin_l, double margin_r, double margin_d);
 }

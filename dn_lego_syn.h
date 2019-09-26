@@ -107,7 +107,8 @@ void conver2seg(std::string image_path, std::string output_path);
 void findPatches(std::string image_name, std::string output_path, int step);
 void test_seg2grammars(ModelInfo& mi, std::string image_name, std::string output_path);
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name);
-
+void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
+void opt_with_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
@@ -135,7 +136,7 @@ std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
-void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
+cv::Mat synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
 
 /**** grammar predictions ****/
 std::vector<double> grammar1(ModelInfo& mi, std::vector<double> paras, bool bDebug);

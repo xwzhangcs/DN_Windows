@@ -16,7 +16,7 @@ std::vector<double> optGrammarParas::fit(const cv::Mat& src_img, const std::vect
 		}
 
 		BFGSSolver solver(src_img, ini_paras, grammar_id, paras_num, modeljson);
-		find_max_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-2), solver, starting_point, 1, 0.1);
+		find_max_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-4), solver, starting_point, 1, 0.005);
 		std::vector<double> ans(paras_num);
 		for (int i = 0; i < paras_num; i++) {
 			ans[i] = starting_point(i);

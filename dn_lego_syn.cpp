@@ -11,11 +11,13 @@ int main(int argc, const char* argv[]) {
 		return -1;
 	}
 	//findPatches("../data/0014_0043.png", "../data/patches", 20);
-	/*std::string aoi = "../data/example/D4";
+	/*std::string aoi = "../data/eval";
 	FacadeSeg eval_obj;
-	eval_obj.eval(aoi + "/seg_pix2pix_out", aoi + "/gt_out", aoi + "/pix2pix_eval.txt");
-	eval_obj.eval(aoi + "/seg_deepFill_out", aoi + "/gt_out", aoi + "/deepFill_eval.txt");
-	eval_obj.eval(aoi + "/seg_lego_out", aoi + "/gt_out", aoi + "/our_eval.txt");*/
+	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
+	eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
+	eval_obj.eval(aoi + "/our_before", aoi + "/gt", aoi + "/our_eval.txt");
+	eval_obj.eval(aoi + "/our_after", aoi + "/gt", aoi + "/our_opt_eval.txt");
+	return 0;*/
 	/*std::string aoi = "../data/example/D4";
 	conver2seg(aoi + "/seg_lego", aoi + "/seg_lego_out");
 	conver2seg(aoi + "/seg_pix2pix", aoi + "/seg_pix2pix_out");
@@ -30,7 +32,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_seg2grammars(mi, "../data/test_seg2grammar", "../data/test_seg2grammar_out");
+	//test_segmentation_model("../data/opt", mi);
+	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -70,6 +73,8 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 	for (int i = 0; i < images.size(); i++) {
 		std::string img_name = image_path + '/' + images[i];
 		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if(src_img.channels() == 4)
+			cv::cvtColor(src_img.clone(), src_img, CV_BGRA2GRAY);
 		// default size for NN
 		int width = mi.defaultSize[0] - 2 * mi.paddingSize[0];
 		int height = mi.defaultSize[1] - 2 * mi.paddingSize[1];
@@ -182,7 +187,24 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 			if (paras[i] < 0)
 				paras[i] = 0;
 		}
-
+		// generate RGB seg img
+		cv::Mat seg_rgb = cv::Mat(src_img.size(), CV_8UC3, bg_color);
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				//noise
+				if ((int)src_img.at<uchar>(i, j) == 0) {
+					seg_rgb.at<cv::Vec3b>(i, j)[0] = 0;
+					seg_rgb.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_rgb.at<cv::Vec3b>(i, j)[2] = 255;
+				}
+				else {
+					seg_rgb.at<cv::Vec3b>(i, j)[0] = 255;
+					seg_rgb.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_rgb.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+			}
+		}
+		//seg_rgb = cv::imread("../data/0005_0013.png", CV_LOAD_IMAGE_UNCHANGED);
 		std::vector<double> predictions;
 		if (best_class == 1) {
 			predictions = grammar1(mi, paras, true);
@@ -206,7 +228,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 			//do nothing
 			predictions = grammar1(mi, paras, true);
 		}
-		if (best_class % 2 == 0) {
+		/*if (best_class % 2 == 0) {
 			if (abs(predictions[0] + 1 - spacing_r) <= 1 && predictions[0] > 1)
 				predictions[0] = spacing_r - 1;
 		}
@@ -215,10 +237,157 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 				predictions[0] = spacing_r;
 		}
 		if (abs(predictions[1] - spacing_c) <= 1 && predictions[1] > 1)
-			predictions[1] = spacing_c;
+			predictions[1] = spacing_c;*/
+		// opt
+		double score_opt = 0;
+		bool bOpt = true;
+		std::vector<double> predictions_opt;
+		if (predictions.size() == 5 && bOpt) {
+			opt_without_doors(seg_rgb, predictions_opt, predictions);
+		}
+		if (predictions.size() == 8 && bOpt) {
+			opt_with_doors(seg_rgb, predictions_opt, predictions);
+		}
+		/*cv::Scalar win_avg_color(0, 0, 255, 0);
+		cv::Scalar bg_avg_color(255, 0, 0, 0);
+		cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
 		cv::Scalar win_avg_color(0, 0, 255, 0);
 		cv::Scalar bg_avg_color(255, 0, 0, 0);
-		synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);
+		cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, false, images[i]);
+		std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
+		double score = /*0.5 * evaluations[0] +*/ 0.5 * evaluations[1] + 0.5 *evaluations[2];
+		std::cout << "score before is " << score << std::endl;
+		std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
+		cv::Mat syn_img_opt = synthesis(predictions_opt, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);
+		cv::imwrite("../data/test.png", seg_rgb);
+		std::vector<double> evaluations_opt = util::eval_accuracy(syn_img_opt, seg_rgb);
+		score = /*0.5 * evaluations[0] + */0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
+		std::cout << "score after is " << score << std::endl;
+	}
+}
+
+void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init) {
+	double score_opt = 0;
+	predictions_opt.resize(9);
+	int v1_init = predictions_init[0] - 1 > 0 ? predictions_init[0] - 1 : predictions_init[0];
+	int v2_init = predictions_init[1] - 1 > 0 ? predictions_init[1] - 1 : predictions_init[1];
+	int v3_init = -2;
+	int v4_init = -2;
+	double step_size = 0.1;
+	double step_size_m = 0.05;
+	for (int v1 = -1; v1 <= 1; v1++) {
+		for (int v2 = 0; v2 <= 0; v2++) {
+			for (int v3 = -2; v3 <= 2; v3++) {
+				for (int v4 = -2; v4 <= 2; v4++) {
+					for (int m_t = 0; m_t <= 4; m_t++) {
+						for (int m_b = 0; m_b <= 4; m_b++) {
+							for (int m_l = 0; m_l <= 4; m_l++) {
+								for (int m_r = 0; m_r <= 4; m_r++) {
+									std::vector<double> predictions_tmp;
+									predictions_tmp.push_back(v1 + predictions_init[0]);
+									predictions_tmp.push_back(v2 + predictions_init[1]);
+									predictions_tmp.push_back(predictions_init[2]);
+									if (v3 * step_size + predictions_init[3] < 0 || v3 * step_size + predictions_init[3] > 0.95)
+										continue;
+									predictions_tmp.push_back(v3 * step_size + predictions_init[3]);
+									if (v4 * step_size + predictions_init[4] < 0 || v4 * step_size + predictions_init[4] > 0.95)
+										continue;
+									predictions_tmp.push_back(v4 * step_size + predictions_init[4]);
+									predictions_tmp.push_back(m_t * step_size_m);
+									predictions_tmp.push_back(m_b * step_size_m);
+									predictions_tmp.push_back(m_l * step_size_m);
+									predictions_tmp.push_back(m_r * step_size_m);
+									//std::cout << "predictions_tmp size is " << predictions_tmp.size() << std::endl;
+									cv::Scalar win_avg_color(0, 0, 255, 0);
+									cv::Scalar bg_avg_color(255, 0, 0, 0);
+									cv::Mat syn_img = synthesis(predictions_tmp, seg_rgb.size(), "../data", win_avg_color, bg_avg_color, false, "opt_without_door.png");
+									//cv::imwrite("../data/test.png", seg_rgb);
+									std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
+									double score_tmp = 0.5 * evaluations[1] + 0.5 *evaluations[2];
+									std::cout << "score_tmp is " << score_tmp << std::endl;
+									if (score_tmp > score_opt) {
+										score_opt = score_tmp;
+										for (int index = 0; index < predictions_tmp.size(); index++) {
+											predictions_opt[index] = predictions_tmp[index];
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init) {
+	double score_opt = 0;
+	predictions_opt.resize(13);
+	int v1_init = predictions_init[0] - 1 > 0 ? predictions_init[0] - 1 : predictions_init[0];
+	int v2_init = predictions_init[1] - 1 > 0 ? predictions_init[1] - 1 : predictions_init[1];
+	int v3_init = predictions_init[3] - 1 > 0 ? predictions_init[3] - 1 : predictions_init[3];
+	double step_size = 0.1;
+	double step_size_m = 0.1;
+	double step_size_m_d = 0.05;
+	for (int v1 = -1; v1 <= 1; v1++) {
+		for (int v2 = -1; v2 <= 1; v2++) {
+			for (int v3 = -1; v3 <= 1; v3++) {
+				for (int v4 = 0; v4 <= 0; v4++) {
+					for (int v5 = -1; v5 <= 1; v5++) {
+						for (int v6 = -1; v6 <= 1; v6++) {
+							for (int v7 = -1; v7 <= 1; v7++) {
+								for (int m_t = 0; m_t <= 2; m_t++) {
+									for (int m_b = 0; m_b <= 2; m_b++) {
+										for (int m_l = 0; m_l <= 2; m_l++) {
+											for (int m_r = 0; m_r <= 2; m_r++) {
+												for (int m_d = 1; m_d <= 3; m_d++) {
+													std::vector<double> predictions_tmp;
+													predictions_tmp.push_back(v1 + predictions_init[0]);
+													predictions_tmp.push_back(v2 + predictions_init[1]);
+													predictions_tmp.push_back(predictions_init[2]);
+													predictions_tmp.push_back(v3 + predictions_init[3]);
+													if (v4 * step_size + predictions_init[4] < 0 || v4 * step_size + predictions_init[4] > 0.95)
+														continue;
+													predictions_tmp.push_back(v4 * step_size + predictions_init[4]);
+													if (v5 * step_size + predictions_init[5] < 0 || v5 * step_size + predictions_init[5] > 0.95)
+														continue;
+													predictions_tmp.push_back(v5 * step_size + predictions_init[5]);
+													if (v6 * step_size + predictions_init[6] < 0 || v6 * step_size + predictions_init[6] > 0.95)
+														continue;
+													predictions_tmp.push_back(v6 * step_size + predictions_init[6]);
+													predictions_tmp.push_back(v7 * step_size + predictions_init[7]);
+
+													predictions_tmp.push_back(m_t * step_size_m);
+													predictions_tmp.push_back(m_b * step_size_m);
+													predictions_tmp.push_back(m_l * step_size_m);
+													predictions_tmp.push_back(m_r * step_size_m);
+													predictions_tmp.push_back(m_d * step_size_m_d);
+													//std::cout << "predictions_tmp size is " << predictions_tmp.size() << std::endl;
+													cv::Scalar win_avg_color(0, 0, 255, 0);
+													cv::Scalar bg_avg_color(255, 0, 0, 0);
+													cv::Mat syn_img = synthesis(predictions_tmp, seg_rgb.size(), "../data", win_avg_color, bg_avg_color, false, "opt_without_door.png");
+													//cv::imwrite("../data/test.png", seg_rgb);
+													std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
+													double score_tmp = /*0.5 * evaluations[0] + */0.5 * evaluations[1] + 0.5 *evaluations[2];
+													std::cout << "score_tmp is " << score_tmp << std::endl;
+													if (score_tmp > score_opt) {
+														score_opt = score_tmp;
+														for (int index = 0; index < predictions_tmp.size(); index++) {
+															predictions_opt[index] = predictions_tmp[index];
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -2613,7 +2782,7 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 	return predictions;
 }
 
-void synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename){
+cv::Mat synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename){
 	cv::Mat syn_img;
 	if (predictions.size() == 5) {
 		int img_rows = predictions[0];
@@ -2639,6 +2808,44 @@ void synthesis(std::vector<double> predictions, cv::Size src_size, std::string d
 		double relative_door_height = predictions[7];
 		syn_img = util::generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height);
 	}
+	if (predictions.size() == 9) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		double relative_width = predictions[3];
+		double relative_height = predictions[4];
+		double margin_t = predictions[5];
+		double margin_b = predictions[6];
+		double margin_l = predictions[7];
+		double margin_r = predictions[8];
+		syn_img = util::generateFacadeSynImage_new(224, 224, img_rows, img_cols, img_groups, relative_width, relative_height, margin_t, margin_b, margin_l, margin_r);
+		/*std::cout << "img_rows is " << img_rows << std::endl;
+		std::cout << "img_cols is " << img_cols << std::endl;
+		std::cout << "img_groups is " << img_groups << std::endl;
+		std::cout << "relative_width is " << relative_width << std::endl;
+		std::cout << "relative_height is " << relative_height << std::endl;*/
+	}
+	if (predictions.size() == 13) {
+		int img_rows = predictions[0];
+		int img_cols = predictions[1];
+		int img_groups = predictions[2];
+		int img_doors = predictions[3];
+		double relative_width = predictions[4];
+		double relative_height = predictions[5];
+		double relative_door_width = predictions[6];
+		double relative_door_height = predictions[7];
+		double margin_t = predictions[8];
+		double margin_b = predictions[9];
+		double margin_l = predictions[10];
+		double margin_r = predictions[11];
+		double margin_d = predictions[12];
+		syn_img = util::generateFacadeSynImage_new(224, 224, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height, margin_t, margin_b, margin_l, margin_r, margin_d);
+		/*std::cout << "img_rows is " << img_rows << std::endl;
+		std::cout << "img_cols is " << img_cols << std::endl;
+		std::cout << "img_groups is " << img_groups << std::endl;
+		std::cout << "relative_width is " << relative_width << std::endl;
+		std::cout << "relative_height is " << relative_height << std::endl;*/
+	}
 	// recover to the original image
 	cv::resize(syn_img, syn_img, src_size);
 	for (int i = 0; i < syn_img.size().height; i++) {
@@ -2655,7 +2862,9 @@ void synthesis(std::vector<double> predictions, cv::Size src_size, std::string d
 			}
 		}
 	}
-	cv::imwrite(dnnsOut_folder + "/" + img_filename, syn_img);
+	if(bDebug)
+		cv::imwrite(dnnsOut_folder + "/" + img_filename, syn_img);
+	return syn_img;
 }
 
 std::vector<string> get_all_files_names_within_folder(std::string folder)

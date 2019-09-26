@@ -31,12 +31,16 @@ class optGrammarParas {
 			for (int i = 0; i < paras_num; i++) {
 				paras.push_back(arg(i));
 			}
-			/*for (int i = 0; i < paras_num; i++) {
+			for (int i = 0; i < paras_num; i++) {
 				std::cout << paras[i] << ", ";
 			}
-			std::cout << std::endl;*/
+			std::cout << std::endl;
 			try {
 				double score = 0.0f;
+				for (int i = 0; i < paras_num; i++) {
+					if (paras[i] < 0 || paras[i] > 1)
+						return 0.0;
+				}
 				// compute IOU
 				// -- go to correct grammar
 				std::vector<double> predictions;
@@ -62,8 +66,18 @@ class optGrammarParas {
 					//do nothing
 					predictions = util::grammar1(modeljson, paras, false);
 				}
+				predictions.push_back(paras[paras_num - 4]);
+				predictions.push_back(paras[paras_num - 3]);
+				predictions.push_back(paras[paras_num - 2]);
+				predictions.push_back(paras[paras_num - 1]);
+				for (int i = 0; i < predictions.size(); i++) {
+					std::cout << predictions[i] << ", ";
+				}
+				std::cout << std::endl;
 				// -- get predicted img
 				cv::Mat syn_img;
+				cv::Scalar win_avg_color(0, 0, 255, 0);
+				cv::Scalar bg_avg_color(255, 0, 0, 0);
 				if (predictions.size() == 5) {
 					int img_rows = predictions[0];
 					int img_cols = predictions[1];
@@ -83,23 +97,37 @@ class optGrammarParas {
 					double relative_door_height = predictions[7];
 					syn_img = util::generateFacadeSynImage(224, 224, img_rows, img_cols, img_groups, img_doors, relative_width, relative_height, relative_door_width, relative_door_height);
 				}
-				// -- compute score
-				int inter_cnt = 0;
-				for (int r = 0; r < target_img.rows; r++) {
-					for (int c = 0; c < target_img.cols; c++) {
-						int syn_b = syn_img.at<cv::Vec3b>(r, c)[0];
-						int syn_g = syn_img.at<cv::Vec3b>(r, c)[0];
-						int syn_r = syn_img.at<cv::Vec3b>(r, c)[0];
-						int src_b = target_img.at<cv::Vec3b>(r, c)[0];
-						int src_g = target_img.at<cv::Vec3b>(r, c)[0];
-						int src_r = target_img.at<cv::Vec3b>(r, c)[0];
-						if (syn_b == 0 && syn_g == 0 && syn_r == 0 && src_b == 0 && src_g == 0 && src_r == 0)
-							inter_cnt++;
-						if (syn_b == 255 && syn_g == 255 && syn_r == 255 && src_b == 255 && src_g == 255 && src_r == 255)
-							inter_cnt++;
+				if (predictions.size() == 9) {
+					int img_rows = predictions[0];
+					int img_cols = predictions[1];
+					int img_groups = predictions[2];
+					double relative_width = predictions[3];
+					double relative_height = predictions[4];
+					double margin_t = predictions[5];
+					double margin_b = predictions[6];
+					double margin_l = predictions[7];
+					double margin_r = predictions[8];
+					syn_img = util::generateFacadeSynImage_new(224, 224, img_rows, img_cols, img_groups, relative_width, relative_height, margin_t, margin_b, margin_l, margin_r);
+				}
+				// recover to the original image
+				cv::resize(syn_img, syn_img, target_img.size());
+				for (int i = 0; i < syn_img.size().height; i++) {
+					for (int j = 0; j < syn_img.size().width; j++) {
+						if (syn_img.at<cv::Vec3b>(i, j)[0] == 0) {
+							syn_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
+							syn_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
+							syn_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+						}
+						else {
+							syn_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
+							syn_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
+							syn_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+						}
 					}
 				}
-				score = inter_cnt * 1.0 / (target_img.rows * target_img.cols);
+				// -- compute score
+				std::vector<double> evaluations = util::eval_accuracy(syn_img, target_img);
+				score = /*0.5 * evaluations[0] + */0.5 * evaluations[1] + 0.5 * evaluations[2];
 				std::cout << "score is " << score << std::endl;
 				return score;
 			}
