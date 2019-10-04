@@ -74,6 +74,7 @@ struct ModelInfo {
 	std::shared_ptr<torch::jit::script::Module> seg_module_pan;
 	std::shared_ptr<torch::jit::script::Module> seg_module_histeq;
 	int seg_module_type;
+	bool bOpt;
 };
 
 // Hold chip info
@@ -107,8 +108,8 @@ void conver2seg(std::string image_path, std::string output_path);
 void findPatches(std::string image_name, std::string output_path, int step);
 void test_seg2grammars(ModelInfo& mi, std::string image_name, std::string output_path);
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name);
-void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
-void opt_with_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
+void test_affine_transformation(std::string image_path, std::string output_path);
+cv::Mat pix2pix_seg(cv::Mat& images, ModelInfo& mi);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
@@ -145,3 +146,9 @@ std::vector<double> grammar3(ModelInfo& mi, std::vector<double> paras, bool bDeb
 std::vector<double> grammar4(ModelInfo& mi, std::vector<double> paras, bool bDebug);
 std::vector<double> grammar5(ModelInfo& mi, std::vector<double> paras, bool bDebug);
 std::vector<double> grammar6(ModelInfo& mi, std::vector<double> paras, bool bDebug);
+
+/**** opt ****/
+void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
+void opt_with_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
+cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug);
+std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img);
