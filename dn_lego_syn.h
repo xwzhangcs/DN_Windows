@@ -109,7 +109,8 @@ void findPatches(std::string image_name, std::string output_path, int step);
 void test_seg2grammars(ModelInfo& mi, std::string image_name, std::string output_path);
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name);
 void test_affine_transformation(std::string image_path, std::string output_path);
-cv::Mat pix2pix_seg(cv::Mat& images, ModelInfo& mi);
+cv::Mat pix2pix_seg(cv::Mat& src_img, ModelInfo& mi);
+int blobs(cv::Mat& src_img);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
@@ -150,5 +151,5 @@ std::vector<double> grammar6(ModelInfo& mi, std::vector<double> paras, bool bDeb
 /**** opt ****/
 void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
 void opt_with_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
-cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug);
+cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug, std::string img_filename);
 std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img);

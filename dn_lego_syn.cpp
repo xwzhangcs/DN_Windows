@@ -10,25 +10,20 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//test_affine_transformation("../data/affine_trans_src", "../data/affine_trans");
-	/*std::string aoi = "../data/metrics/eval";
+	std::string aoi = "../data/metrics/eval";
 	FacadeSeg eval_obj;
 	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
 	eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
 	eval_obj.eval(aoi + "/our_before", aoi + "/gt", aoi + "/our_eval.txt");
 	eval_obj.eval(aoi + "/our_affine", aoi + "/gt", aoi + "/our_affine_eval.txt");
 	eval_obj.eval(aoi + "/our_after", aoi + "/gt", aoi + "/our_opt_eval.txt");
-	return 0;*/
-	
+	return 0;
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	cv::Mat src_img = cv::imread("../data/0001_0220.png", CV_LOAD_IMAGE_UNCHANGED);
-	cv::Mat output = pix2pix_seg(src_img, mi);
-	cv::imwrite("../data/pix2pix_seg.png", output);
 	//test_segmentation_model("../data/D_deepFill", mi);
-	//test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
+	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -318,16 +313,23 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
 		cv::Scalar win_avg_color(0, 0, 255, 0);
 		cv::Scalar bg_avg_color(255, 0, 0, 0);
+		int gt_blobs = blobs(seg_rgb);
 		cv::Mat syn_img = synthesis(predictions, src_img.size(), "../data", win_avg_color, bg_avg_color, false, "syn.png");
 		std::vector<double> evaluations = eval_accuracy(syn_img, seg_rgb);
-		double score = /*0.5 * evaluations[0] +*/ 0.5 * evaluations[1] + 0.5 *evaluations[2];
+		int tmp_blobs = 0;
+		if(predictions.size() == 5)
+			tmp_blobs = predictions[0] * predictions[1];
+		else
+			tmp_blobs = predictions[0] * predictions[1] + predictions[3];
+		double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+		double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
 		std::cout << "score before is " << score << std::endl;
 		std::cout << "predictions[0] is " << predictions[0] << std::endl;
 		std::cout << "predictions[1] is " << predictions[1] << std::endl;
 		std::cout << "predictions[3] is " << predictions[3] << std::endl;
 		std::cout << "predictions[4] is " << predictions[4] << std::endl;
 		std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
-		cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_img.size(), win_avg_color, bg_avg_color, true);
+		cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_img.size(), win_avg_color, bg_avg_color, true, output_path + "/" + images[i]);
 		cv::imwrite("../data/test.png", seg_rgb);
 		std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, seg_rgb);
 		std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
@@ -338,18 +340,52 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
 		std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
 		std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
-		score = /*0.5 * evaluations[0] + */0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
+		if (predictions.size() == 5)
+			tmp_blobs = predictions_opt[0] * predictions_opt[1];
+		else
+			tmp_blobs = predictions_opt[0] * predictions_opt[1] + predictions_opt[3];
+		blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+		std::cout << "evaluations_opt[0] is " << evaluations_opt[0] << std::endl;
+		std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
+		std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
+		score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
 		std::cout << "score after is " << score << std::endl;
 	}
+}
+
+int blobs(cv::Mat& src_img) {
+	// find the number of windows & doors
+	int padding_size = 5;
+	int borderType = cv::BORDER_CONSTANT;
+	cv::Mat padding_img, src_gray;
+	cv::copyMakeBorder(src_img, padding_img, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 0, 0));
+	cv::cvtColor(padding_img, src_gray, CV_BGR2GRAY);
+	for (int i = 0; i < padding_img.size().height; i++) {
+		for (int j = 0; j < padding_img.size().width; j++) {
+			// wall
+			if (padding_img.at<cv::Vec3b>(i, j)[0] == 0 && padding_img.at<cv::Vec3b>(i, j)[1] == 0 && padding_img.at<cv::Vec3b>(i, j)[2] == 255) {
+				src_gray.at<uchar>(i, j) = (uchar)0;
+			}
+			else {// non-wall
+				src_gray.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+	}
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(src_gray, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, cv::Point(0, 0));
+	return contours.size() - 1;
 }
 
 void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init) {
 	double score_opt = 0;
 	predictions_opt.resize(9);
 	double step_size = 0.02;
-	double step_size_m = 0.04;
+	double step_size_m = 0.03;
+	int gt_blobs = blobs(seg_rgb);
+	std::cout << "gt_blobs is " << gt_blobs << std::endl;
 	for (int v1 = -2; v1 <= 2; v1++) {
-		for (int v2 = -2; v2 <= -2; v2++) {
+		for (int v2 = -2; v2 <= 2; v2++) {
 			for (int v3 = -10; v3 <= 10; v3++) {
 				for (int v4 = -10; v4 <= 10; v4++) {
 					for (int m_t = 0; m_t <= 5; m_t++) {
@@ -372,9 +408,13 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 									predictions_tmp.push_back(m_r * step_size_m);
 									cv::Scalar win_avg_color(0, 0, 255, 0);
 									cv::Scalar bg_avg_color(255, 0, 0, 0);
-									cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false);
+									cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false, "../data/tmp.png");
 									std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
-									double score_tmp = 0.5 * evaluations[1] + 0.5 *evaluations[2];
+									int tmp_blobs = predictions_tmp[0] * predictions_tmp[1];
+									double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+									//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
+									//std::cout << "blobs_score is " << blobs_score << std::endl;
+									double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
 									//std::cout << "score_tmp is " << score_tmp << std::endl;
 									if (score_tmp > score_opt) {
 										score_opt = score_tmp;
@@ -398,6 +438,7 @@ void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std:
 	double step_size = 0.05;
 	double step_size_m = 0.05;
 	double step_size_m_d = 0.05;
+	int gt_blobs = blobs(seg_rgb);
 	for (int v1 = -1; v1 <= 1; v1++) {
 		for (int v2 = -1; v2 <= 1; v2++) {
 			for (int v3 = -1; v3 <= 1; v3++) {
@@ -434,10 +475,12 @@ void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std:
 													//std::cout << "predictions_tmp size is " << predictions_tmp.size() << std::endl;
 													cv::Scalar win_avg_color(0, 0, 255, 0);
 													cv::Scalar bg_avg_color(255, 0, 0, 0);
-													cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false);
+													cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false, "../data/tmp.png");
 													//cv::imwrite("../data/test.png", seg_rgb);
+													int tmp_blobs = predictions_tmp[0] * predictions_tmp[1] + predictions_tmp[3];
+													double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 													std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
-													double score_tmp = /*0.5 * evaluations[0] + */0.5 * evaluations[1] + 0.5 *evaluations[2];
+													double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
 													//std::cout << "score_tmp is " << score_tmp << std::endl;
 													if (score_tmp > score_opt) {
 														score_opt = score_tmp;
@@ -3111,7 +3154,7 @@ cv::Mat synthesis(std::vector<double> predictions, cv::Size src_size, std::strin
 	return syn_img;
 }
 
-cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug) {
+cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug, std::string img_filename) {
 	int height = src_size.height;
 	int width = src_size.width;
 	int thickness = -1;
@@ -3199,7 +3242,7 @@ cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Sc
 
 	}
 	if (bDebug)
-		cv::imwrite("../data/opt.png", syn_img);
+		cv::imwrite(img_filename, syn_img);
 	return syn_img;
 }
 
