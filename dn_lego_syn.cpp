@@ -10,14 +10,14 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	std::string aoi = "../data/metrics/eval";
+	/*std::string aoi = "../data/metrics/eval";
 	FacadeSeg eval_obj;
 	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
 	eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
 	eval_obj.eval(aoi + "/our_before", aoi + "/gt", aoi + "/our_eval.txt");
 	eval_obj.eval(aoi + "/our_affine", aoi + "/gt", aoi + "/our_affine_eval.txt");
 	eval_obj.eval(aoi + "/our_after", aoi + "/gt", aoi + "/our_opt_eval.txt");
-	return 0;
+	return 0;*/
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
@@ -302,8 +302,10 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		double score_opt = 0;
 		bool bOpt = true;
 		std::vector<double> predictions_opt;
+		std::vector<double> trans_opt;
 		if (predictions.size() == 5 && bOpt) {
-			opt_without_doors(seg_rgb, predictions_opt, predictions);
+			//opt_without_doors(seg_rgb, predictions_opt, predictions);
+			opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
 		}
 		if (predictions.size() == 8 && bOpt) {
 			opt_with_doors(seg_rgb, predictions_opt, predictions);
@@ -331,7 +333,22 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
 		cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_img.size(), win_avg_color, bg_avg_color, true, output_path + "/" + images[i]);
 		cv::imwrite("../data/test.png", seg_rgb);
-		std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, seg_rgb);
+
+		cv::Mat affineTransform(2, 3, CV_32FC1);
+		// Initialise translational, rotational and scaling values for transformation
+		affineTransform.at<float>(0, 0) = cos(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[1] * 0.1);
+		affineTransform.at<float>(0, 1) = -sin(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[2] * 0.1);
+		affineTransform.at<float>(0, 2) = 0;
+
+		affineTransform.at<float>(1, 0) = sin(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[1] * 0.1);
+		affineTransform.at<float>(1, 1) = cos(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[2] * 0.1);
+		affineTransform.at<float>(1, 2) = 0;
+		cv::Mat dst_opt = cv::Mat(syn_img_opt.size(), CV_8UC3, bg_avg_color);
+		warpAffine(syn_img_opt, dst_opt, affineTransform, syn_img_opt.size(), cv::INTER_LINEAR,
+			cv::BORDER_CONSTANT,
+			cv::Scalar(255, 0, 0));
+
+		std::vector<double> evaluations_opt = eval_accuracy(dst_opt, seg_rgb);
 		std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
 		std::cout << "predictions_opt[1] is " << predictions_opt[1] << std::endl;
 		std::cout << "predictions_opt[3] is " << predictions_opt[3] << std::endl;
@@ -340,6 +357,9 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
 		std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
 		std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
+		std::cout << "trans_opt[0] is " << trans_opt[0] << std::endl;
+		std::cout << "trans_opt[1] is " << trans_opt[1] << std::endl;
+		std::cout << "trans_opt[2] is " << trans_opt[2] << std::endl;
 		if (predictions.size() == 5)
 			tmp_blobs = predictions_opt[0] * predictions_opt[1];
 		else
@@ -420,6 +440,86 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 										score_opt = score_tmp;
 										for (int index = 0; index < predictions_tmp.size(); index++) {
 											predictions_opt[index] = predictions_tmp[index];
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double>& trans_opt, std::vector<double> predictions_init) {
+	double score_opt = 0;
+	predictions_opt.resize(9);
+	trans_opt.resize(3);
+	double step_size = 0.02;
+	double step_size_m = 0.03;
+	int gt_blobs = blobs(seg_rgb);
+	std::cout << "gt_blobs is " << gt_blobs << std::endl;
+	for (int v1 = -1; v1 <= 1; v1++) {
+		for (int v2 = -1; v2 <= 1; v2++) {
+			for (int v3 = -8; v3 <= 8; v3++) {
+				for (int v4 = -8; v4 <= 8; v4++) {
+					for (int m_t = 0; m_t <= 2; m_t++) {
+						for (int m_b = 0; m_b <= 2; m_b++) {
+							for (int m_l = 0; m_l <= 2; m_l++) {
+								for (int m_r = 0; m_r <= 2; m_r++) {
+									std::vector<double> predictions_tmp;
+									predictions_tmp.push_back(v1 + predictions_init[0]);
+									predictions_tmp.push_back(v2 + predictions_init[1]);
+									predictions_tmp.push_back(predictions_init[2]);
+									if (v3 * step_size + predictions_init[3] < 0 || v3 * step_size + predictions_init[3] > 0.95)
+										continue;
+									predictions_tmp.push_back(v3 * step_size + predictions_init[3]);
+									if (v4 * step_size + predictions_init[4] < 0 || v4 * step_size + predictions_init[4] > 0.95)
+										continue;
+									predictions_tmp.push_back(v4 * step_size + predictions_init[4]);
+									predictions_tmp.push_back(m_t * step_size_m);
+									predictions_tmp.push_back(m_b * step_size_m);
+									predictions_tmp.push_back(m_l * step_size_m);
+									predictions_tmp.push_back(m_r * step_size_m);
+									cv::Scalar win_avg_color(0, 0, 255, 0);
+									cv::Scalar bg_avg_color(255, 0, 0, 0);
+									cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false, "../data/tmp.png");
+									for (int theta = -4; theta <= 4; theta += 1) {
+										for (int scaleX = 0; scaleX <= 0; scaleX += 1) {
+											for (int scaleY = 0; scaleY <= 0; scaleY += 1) {
+												// Stores affine transformation matrix
+												cv::Mat affineTransform(2, 3, CV_32FC1);
+												// Initialise translational, rotational and scaling values for transformation
+												affineTransform.at<float>(0, 0) = cos(theta * CV_PI / 180) * (1.0 + scaleX * 0.1);
+												affineTransform.at<float>(0, 1) = -sin(theta * CV_PI / 180) * (1.0 + scaleY * 0.1);
+												affineTransform.at<float>(0, 2) = 0;
+
+												affineTransform.at<float>(1, 0) = sin(theta * CV_PI / 180) * (1.0 + scaleX * 0.1);
+												affineTransform.at<float>(1, 1) = cos(theta * CV_PI / 180) * (1.0 + scaleY * 0.1);
+												affineTransform.at<float>(1, 2) = 0;
+												cv::Mat dst_tmp = cv::Mat(syn_img.size(), CV_8UC3, bg_avg_color);
+												warpAffine(syn_img, dst_tmp, affineTransform, syn_img.size(), cv::INTER_LINEAR,
+													cv::BORDER_CONSTANT,
+													cv::Scalar(255, 0, 0));
+
+												std::vector<double> evaluations = util::eval_accuracy(dst_tmp, seg_rgb);
+												int tmp_blobs = predictions_tmp[0] * predictions_tmp[1];
+												double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+												//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
+												//std::cout << "blobs_score is " << blobs_score << std::endl;
+												double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+												//std::cout << "score_tmp is " << score_tmp << std::endl;
+												if (score_tmp > score_opt) {
+													score_opt = score_tmp;
+													for (int index = 0; index < predictions_tmp.size(); index++) {
+														predictions_opt[index] = predictions_tmp[index];
+													}
+													trans_opt[0] = theta;
+													trans_opt[1] = scaleX;
+													trans_opt[2] = scaleY;
+												}
+											}
 										}
 									}
 								}

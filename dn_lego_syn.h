@@ -150,6 +150,7 @@ std::vector<double> grammar6(ModelInfo& mi, std::vector<double> paras, bool bDeb
 
 /**** opt ****/
 void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
+void opt_without_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double>& trans_opt, std::vector<double> predictions_init);
 void opt_with_doors(cv::Mat& seg_rbg, std::vector<double>& predictions_opt, std::vector<double> predictions_init);
 cv::Mat synthesis_opt(std::vector<double> predictions, cv::Size src_size, cv::Scalar win_color, cv::Scalar bg_color, bool bDebug, std::string img_filename);
 std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img);
