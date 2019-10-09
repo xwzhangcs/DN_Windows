@@ -10,6 +10,13 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	std::string img_1 = "../data/metrics/eval/gt/0001_0220.png";
+	cv::Mat gt_img = cv::imread(img_1, CV_LOAD_IMAGE_UNCHANGED);
+	std::string img_2 = "../data/metrics/eval/our_after/0001_0220.png";
+	cv::Mat seg_img = cv::imread(img_2, CV_LOAD_IMAGE_UNCHANGED);
+	std::cout << eval_accuracy(seg_img, gt_img) << std::endl;
+	std::cout << "-----------------------------" << std::endl;
+	std::cout << eval_accuracy_new(seg_img, gt_img) << std::endl;
 	/*std::string aoi = "../data/metrics/eval";
 	FacadeSeg eval_obj;
 	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
@@ -304,8 +311,8 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::vector<double> predictions_opt;
 		std::vector<double> trans_opt;
 		if (predictions.size() == 5 && bOpt) {
-			//opt_without_doors(seg_rgb, predictions_opt, predictions);
-			opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
+			opt_without_doors(seg_rgb, predictions_opt, predictions);
+			//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
 		}
 		if (predictions.size() == 8 && bOpt) {
 			opt_with_doors(seg_rgb, predictions_opt, predictions);
@@ -4002,11 +4009,58 @@ std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img)
 	double recall = 1.0 * seg_tp / (seg_tp + seg_fn);
 	eval_metrix.push_back(precision);
 	eval_metrix.push_back(recall);
-	/*std::cout << "P = " << gt_p << std::endl;
+	std::cout << "P = " << gt_p << std::endl;
 	std::cout << "N = " << gt_n << std::endl;
 	std::cout << "TP = " << seg_tp << std::endl;
 	std::cout << "FN = " << seg_fn << std::endl;
 	std::cout << "TN = " << seg_tn << std::endl;
-	std::cout << "FP = " << seg_fp << std::endl;*/
+	std::cout << "FP = " << seg_fp << std::endl;
+	return eval_metrix;
+}
+
+std::vector<double> eval_accuracy_new(const cv::Mat& seg_img, const cv::Mat& gt_img) {
+	int gt_p = 0;
+	int seg_tp = 0;
+	int seg_fn = 0;
+	int gt_n = 0;
+	int seg_tn = 0;
+	int seg_fp = 0;
+
+	assert(seg_img.channels() == 3 && gt_img.channels() == 3);
+	// Convert seg_img and gt_img into masks
+	cv::Mat seg_r(seg_img.size(), CV_8UC1);
+	cv::Mat seg_b(seg_img.size(), CV_8UC1);
+	cv::Mat gt_r(seg_img.size(), CV_8UC1);
+	cv::Mat gt_b(seg_img.size(), CV_8UC1);
+	cv::mixChannels(
+		std::vector<cv::Mat>{ seg_img, gt_img },
+		std::vector<cv::Mat>{ seg_b, seg_r, gt_b, gt_r },
+		std::vector<int>{ 0, 0, 2, 1, 3, 2, 5, 3 });
+	cv::Mat seg = (seg_b == 0) & (seg_r == 255);
+	cv::Mat gt = (gt_b == 0) & (gt_r == 255);
+
+	gt_p = cv::countNonZero(gt);
+	gt_n = cv::countNonZero(~gt);
+	seg_tp = cv::countNonZero(gt & seg);
+	seg_fn = cv::countNonZero(gt & ~seg);
+	seg_tn = cv::countNonZero(~gt & ~seg);
+	seg_fp = cv::countNonZero(~gt & seg);
+
+	// return pixel accuracy and class accuracy
+	std::vector<double> eval_metrix;
+	// accuracy 
+	eval_metrix.push_back(1.0 * (seg_tp + seg_tn) / (gt_p + gt_n));
+	// precision
+	double precision = 1.0 * seg_tp / (seg_tp + seg_fp);
+	// recall
+	double recall = 1.0 * seg_tp / (seg_tp + seg_fn);
+	eval_metrix.push_back(precision);
+	eval_metrix.push_back(recall);
+	std::cout << "P = " << gt_p << std::endl;
+	std::cout << "N = " << gt_n << std::endl;
+	std::cout << "TP = " << seg_tp << std::endl;
+	std::cout << "FN = " << seg_fn << std::endl;
+	std::cout << "TN = " << seg_tn << std::endl;
+	std::cout << "FP = " << seg_fp << std::endl;
 	return eval_metrix;
 }
