@@ -10,27 +10,34 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	std::string img_1 = "../data/metrics/eval/gt/0001_0220.png";
+	/*std::string img_1 = "../data/metrics/eval/gt/0001_0220.png";
 	cv::Mat gt_img = cv::imread(img_1, CV_LOAD_IMAGE_UNCHANGED);
 	std::string img_2 = "../data/metrics/eval/our_after/0001_0220.png";
 	cv::Mat seg_img = cv::imread(img_2, CV_LOAD_IMAGE_UNCHANGED);
 	std::cout << eval_accuracy(seg_img, gt_img) << std::endl;
 	std::cout << "-----------------------------" << std::endl;
-	std::cout << eval_accuracy_new(seg_img, gt_img) << std::endl;
+	std::cout << eval_accuracy_old(seg_img, gt_img) << std::endl;
+	return 0;*/
 	/*std::string aoi = "../data/metrics/eval";
 	FacadeSeg eval_obj;
 	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
 	eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
 	eval_obj.eval(aoi + "/our_before", aoi + "/gt", aoi + "/our_eval.txt");
-	eval_obj.eval(aoi + "/our_affine", aoi + "/gt", aoi + "/our_affine_eval.txt");
-	eval_obj.eval(aoi + "/our_after", aoi + "/gt", aoi + "/our_opt_eval.txt");
+	eval_obj.eval(aoi + "/our_after_gt", aoi + "/gt", aoi + "/our_opt_gt_eval.txt");
+	eval_obj.eval(aoi + "/our_after_seg", aoi + "/gt", aoi + "/our_opt_v1_eval.txt");
+	eval_obj.eval(aoi + "/our_after_seg_without_blob", aoi + "/gt", aoi + "/our_opt_v2_eval.txt");
 	return 0;*/
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
 	//test_segmentation_model("../data/D_deepFill", mi);
+	std::clock_t start;
+	double duration;
+	start = std::clock();
 	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
+	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+	std::cout << "duration: " << duration << '\n';
 	return 0;
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -271,7 +278,8 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 				}
 			}
 		}
-		seg_rgb = cv::imread("../data/gt/" + images[i], CV_LOAD_IMAGE_UNCHANGED);
+		seg_rgb = cv::imread("../data/pix2pix/" + images[i], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat gt_img = cv::imread("../data/gt/" + images[i], CV_LOAD_IMAGE_UNCHANGED);
 		std::vector<double> predictions;
 		if (best_class == 1) {
 			predictions = grammar1(mi, paras, true);
@@ -311,27 +319,29 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::vector<double> predictions_opt;
 		std::vector<double> trans_opt;
 		if (predictions.size() == 5 && bOpt) {
-			opt_without_doors(seg_rgb, predictions_opt, predictions);
+			opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
 			//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
 		}
 		if (predictions.size() == 8 && bOpt) {
-			opt_with_doors(seg_rgb, predictions_opt, predictions);
+			opt_with_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
 		}
 		/*cv::Scalar win_avg_color(0, 0, 255, 0);
 		cv::Scalar bg_avg_color(255, 0, 0, 0);
 		cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
 		cv::Scalar win_avg_color(0, 0, 255, 0);
 		cv::Scalar bg_avg_color(255, 0, 0, 0);
-		int gt_blobs = blobs(seg_rgb);
+		int gt_blobs = blobs(gt_img);
 		cv::Mat syn_img = synthesis(predictions, src_img.size(), "../data", win_avg_color, bg_avg_color, false, "syn.png");
-		std::vector<double> evaluations = eval_accuracy(syn_img, seg_rgb);
+		std::vector<double> evaluations = eval_accuracy(syn_img, gt_img);
 		int tmp_blobs = 0;
 		if(predictions.size() == 5)
 			tmp_blobs = predictions[0] * predictions[1];
 		else
 			tmp_blobs = predictions[0] * predictions[1] + predictions[3];
 		double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
-		double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
+		//double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
+		double score = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+		//double score = 0.5 * evaluations[1] + 0.5 *evaluations[2];
 		std::cout << "score before is " << score << std::endl;
 		std::cout << "predictions[0] is " << predictions[0] << std::endl;
 		std::cout << "predictions[1] is " << predictions[1] << std::endl;
@@ -341,21 +351,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_img.size(), win_avg_color, bg_avg_color, true, output_path + "/" + images[i]);
 		cv::imwrite("../data/test.png", seg_rgb);
 
-		cv::Mat affineTransform(2, 3, CV_32FC1);
-		// Initialise translational, rotational and scaling values for transformation
-		affineTransform.at<float>(0, 0) = cos(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[1] * 0.1);
-		affineTransform.at<float>(0, 1) = -sin(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[2] * 0.1);
-		affineTransform.at<float>(0, 2) = 0;
-
-		affineTransform.at<float>(1, 0) = sin(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[1] * 0.1);
-		affineTransform.at<float>(1, 1) = cos(trans_opt[0] * CV_PI / 180) * (1.0 + trans_opt[2] * 0.1);
-		affineTransform.at<float>(1, 2) = 0;
-		cv::Mat dst_opt = cv::Mat(syn_img_opt.size(), CV_8UC3, bg_avg_color);
-		warpAffine(syn_img_opt, dst_opt, affineTransform, syn_img_opt.size(), cv::INTER_LINEAR,
-			cv::BORDER_CONSTANT,
-			cv::Scalar(255, 0, 0));
-
-		std::vector<double> evaluations_opt = eval_accuracy(dst_opt, seg_rgb);
+		std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, gt_img);
 		std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
 		std::cout << "predictions_opt[1] is " << predictions_opt[1] << std::endl;
 		std::cout << "predictions_opt[3] is " << predictions_opt[3] << std::endl;
@@ -364,9 +360,6 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
 		std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
 		std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
-		std::cout << "trans_opt[0] is " << trans_opt[0] << std::endl;
-		std::cout << "trans_opt[1] is " << trans_opt[1] << std::endl;
-		std::cout << "trans_opt[2] is " << trans_opt[2] << std::endl;
 		if (predictions.size() == 5)
 			tmp_blobs = predictions_opt[0] * predictions_opt[1];
 		else
@@ -375,7 +368,9 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "evaluations_opt[0] is " << evaluations_opt[0] << std::endl;
 		std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
 		std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
-		score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
+		//score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
+		score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
+		//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
 		std::cout << "score after is " << score << std::endl;
 	}
 }
@@ -404,17 +399,36 @@ int blobs(cv::Mat& src_img) {
 	return contours.size() - 1;
 }
 
-void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init) {
+void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init, int step, double range) {
 	double score_opt = 0;
 	predictions_opt.resize(9);
-	double step_size = 0.02;
-	double step_size_m = 0.03;
+	int width = seg_rgb.size().width; 
+	int height = seg_rgb.size().height;
+	double FH = height * 1.0 / predictions_init[0];
+	double FW = width * 1.0 / predictions_init[1];
+	double step_size_w = step / FW;
+	double step_size_h = step / FH;
+	double range_adjust = range;
+	int v3_min = - ceil(range_adjust / step_size_w);
+	int v3_max = -v3_min;
+	int v4_min = -ceil(range_adjust / step_size_h);
+	int v4_max = -v4_min;
+	double step_size_m_w = step * 1.0 / width;
+	double step_size_m_h = step * 1.0 / height;
 	int gt_blobs = blobs(seg_rgb);
 	std::cout << "gt_blobs is " << gt_blobs << std::endl;
+	std::cout << "step_size_w is " << step_size_w << std::endl;
+	std::cout << "step_size_h is " << step_size_h << std::endl;
+	std::cout << "v3_min is " << v3_min << std::endl;
+	std::cout << "v3_max is " << v3_max << std::endl;
+	std::cout << "v4_min is " << v4_min << std::endl;
+	std::cout << "v4_max is " << v4_max << std::endl;
+	std::cout << "step_size_m_w is " << step_size_m_w << std::endl;
+	std::cout << "step_size_m_h is " << step_size_m_h << std::endl;
 	for (int v1 = -2; v1 <= 2; v1++) {
 		for (int v2 = -2; v2 <= 2; v2++) {
-			for (int v3 = -10; v3 <= 10; v3++) {
-				for (int v4 = -10; v4 <= 10; v4++) {
+			for (int v3 = v3_min; v3 <= v3_max; v3++) {
+				for (int v4 = v4_min; v4 <= v4_max; v4++) {
 					for (int m_t = 0; m_t <= 5; m_t++) {
 						for (int m_b = 0; m_b <= 5; m_b++) {
 							for (int m_l = 0; m_l <= 5; m_l++) {
@@ -423,25 +437,27 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 									predictions_tmp.push_back(v1 + predictions_init[0]);
 									predictions_tmp.push_back(v2 + predictions_init[1]);
 									predictions_tmp.push_back(predictions_init[2]);
-									if (v3 * step_size + predictions_init[3] < 0 || v3 * step_size + predictions_init[3] > 0.95)
+									if (v3 * step_size_w + predictions_init[3] < 0 || v3 * step_size_w + predictions_init[3] > 1 - step_size_w)
 										continue;
-									predictions_tmp.push_back(v3 * step_size + predictions_init[3]);
-									if (v4 * step_size + predictions_init[4] < 0 || v4 * step_size + predictions_init[4] > 0.95)
+									predictions_tmp.push_back(v3 * step_size_w + predictions_init[3]);
+									if (v4 * step_size_h + predictions_init[4] < 0 || v4 * step_size_h + predictions_init[4] > 1 - step_size_h)
 										continue;
-									predictions_tmp.push_back(v4 * step_size + predictions_init[4]);
-									predictions_tmp.push_back(m_t * step_size_m);
-									predictions_tmp.push_back(m_b * step_size_m);
-									predictions_tmp.push_back(m_l * step_size_m);
-									predictions_tmp.push_back(m_r * step_size_m);
+									predictions_tmp.push_back(v4 * step_size_h + predictions_init[4]);
+									predictions_tmp.push_back(m_t * step_size_m_h);
+									predictions_tmp.push_back(m_b * step_size_m_h);
+									predictions_tmp.push_back(m_l * step_size_m_w);
+									predictions_tmp.push_back(m_r * step_size_m_w);
 									cv::Scalar win_avg_color(0, 0, 255, 0);
 									cv::Scalar bg_avg_color(255, 0, 0, 0);
 									cv::Mat syn_img = synthesis_opt(predictions_tmp, seg_rgb.size(), win_avg_color, bg_avg_color, false, "../data/tmp.png");
-									std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
+									std::vector<double> evaluations = eval_accuracy(syn_img, seg_rgb);
 									int tmp_blobs = predictions_tmp[0] * predictions_tmp[1];
 									double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 									//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
 									//std::cout << "blobs_score is " << blobs_score << std::endl;
-									double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+									//double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+									double score_tmp = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+									//double score_tmp =  0.5 * evaluations[1] + 0.5 *evaluations[2];
 									//std::cout << "score_tmp is " << score_tmp << std::endl;
 									if (score_tmp > score_opt) {
 										score_opt = score_tmp;
@@ -510,7 +526,7 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 													cv::BORDER_CONSTANT,
 													cv::Scalar(255, 0, 0));
 
-												std::vector<double> evaluations = util::eval_accuracy(dst_tmp, seg_rgb);
+												std::vector<double> evaluations = eval_accuracy(dst_tmp, seg_rgb);
 												int tmp_blobs = predictions_tmp[0] * predictions_tmp[1];
 												double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 												//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
@@ -539,19 +555,37 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 	}
 }
 
-void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init) {
+void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std::vector<double> predictions_init, int step, double range) {
 	double score_opt = 0;
 	predictions_opt.resize(13);
-	double step_size = 0.05;
-	double step_size_m = 0.05;
-	double step_size_m_d = 0.05;
+	int width = seg_rgb.size().width;
+	int height = seg_rgb.size().height;
+	double FH = height * 1.0 / predictions_init[0];
+	double FW = width * 1.0 / predictions_init[1];
+	double step_size_w = step / FW;
+	double step_size_h = step / FH;
+	double range_adjust = range;
+	int v4_min = -ceil(range_adjust / step_size_w);
+	int v4_max = -v4_min;
+	int v5_min = -ceil(range_adjust / step_size_h);
+	int v5_max = -v5_min;
+	double DFW = width * 1.0 / predictions_init[3];
+	double DFH = 1.0 * height ;
+	double step_size_dw = step / DFW;
+	double step_size_dh = step / DFH;
+	int v6_min = -ceil(range_adjust / step_size_dw);
+	int v6_max = -v6_min;
+
+	double step_size_m_w = step * 1.0 / width;
+	double step_size_m_h = step * 1.0 / height;
+	double step_size_m_d = step * 1.0 / height;
 	int gt_blobs = blobs(seg_rgb);
 	for (int v1 = -1; v1 <= 1; v1++) {
 		for (int v2 = -1; v2 <= 1; v2++) {
 			for (int v3 = -1; v3 <= 1; v3++) {
-				for (int v4 = -3; v4 <= 3; v4++) {
-					for (int v5 = -3; v5 <= 3; v5++) {
-						for (int v6 = -3; v6 <= 3; v6++) {
+				for (int v4 = v4_min; v4 <= v4_max; v4++) {
+					for (int v5 = v5_min; v5 <= v5_max; v5++) {
+						for (int v6 = v6_min; v6 <= v6_max; v6++) {
 							for (int v7 = -2; v7 <= 2; v7++) {
 								for (int m_t = 0; m_t <= 2; m_t++) {
 									for (int m_b = 0; m_b <= 2; m_b++) {
@@ -563,21 +597,21 @@ void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std:
 													predictions_tmp.push_back(v2 + predictions_init[1]);
 													predictions_tmp.push_back(predictions_init[2]);
 													predictions_tmp.push_back(v3 + predictions_init[3]);
-													if (v4 * step_size + predictions_init[4] < 0 || v4 * step_size + predictions_init[4] > 0.95)
+													if (v4 * step_size_w + predictions_init[4] < 0 || v4 * step_size_w + predictions_init[4] > 1 - step_size_w)
 														continue;
-													predictions_tmp.push_back(v4 * step_size + predictions_init[4]);
-													if (v5 * step_size + predictions_init[5] < 0 || v5 * step_size + predictions_init[5] > 0.95)
+													predictions_tmp.push_back(v4 * step_size_w + predictions_init[4]);
+													if (v5 * step_size_h + predictions_init[5] < 0 || v5 * step_size_h + predictions_init[5] > 1 - step_size_h)
 														continue;
-													predictions_tmp.push_back(v5 * step_size + predictions_init[5]);
-													if (v6 * step_size + predictions_init[6] < 0 || v6 * step_size + predictions_init[6] > 0.95)
+													predictions_tmp.push_back(v5 * step_size_h + predictions_init[5]);
+													if (v6 * step_size_dw + predictions_init[6] < 0 || v6 * step_size_dw + predictions_init[6] > 1 - step_size_dw)
 														continue;
-													predictions_tmp.push_back(v6 * step_size + predictions_init[6]);
-													predictions_tmp.push_back(v7 * step_size + predictions_init[7]);
+													predictions_tmp.push_back(v6 * step_size_dw + predictions_init[6]);
+													predictions_tmp.push_back(v7 * step_size_dh + predictions_init[7]);
 
-													predictions_tmp.push_back(m_t * step_size_m);
-													predictions_tmp.push_back(m_b * step_size_m);
-													predictions_tmp.push_back(m_l * step_size_m);
-													predictions_tmp.push_back(m_r * step_size_m);
+													predictions_tmp.push_back(m_t * step_size_m_h);
+													predictions_tmp.push_back(m_b * step_size_m_h);
+													predictions_tmp.push_back(m_l * step_size_m_w);
+													predictions_tmp.push_back(m_r * step_size_m_w);
 													predictions_tmp.push_back(m_d * step_size_m_d);
 													//std::cout << "predictions_tmp size is " << predictions_tmp.size() << std::endl;
 													cv::Scalar win_avg_color(0, 0, 255, 0);
@@ -587,7 +621,9 @@ void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std:
 													int tmp_blobs = predictions_tmp[0] * predictions_tmp[1] + predictions_tmp[3];
 													double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 													std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
-													double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+													//double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+													double score_tmp = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+													//double score_tmp = 0.5 * evaluations[1] + 0.5 *evaluations[2];
 													//std::cout << "score_tmp is " << score_tmp << std::endl;
 													if (score_tmp > score_opt) {
 														score_opt = score_tmp;
@@ -1803,6 +1839,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	//
 	mi.debug = util::readBoolValue(docModel, "debug", false);
 	mi.bOpt = util::readBoolValue(docModel, "opt", false);
+	mi.opt_step = util::readNumber(docModel, "opt_step", 2);
+	mi.opt_range = util::readNumber(docModel, "opt_range", 0.2);
 	rapidjson::Value& grammars = docModel["grammars"];
 	// classifier
 	rapidjson::Value& grammar_classifier = grammars["classifier"];
@@ -3139,10 +3177,10 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 	}
 	std::vector<double> predictions_opt;
 	if (predictions.size() == 5 && bOpt) {
-		opt_without_doors(seg_rgb, predictions_opt, predictions);
+		opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
 	}
 	if (predictions.size() == 8 && bOpt) {
-		opt_with_doors(seg_rgb, predictions_opt, predictions);
+		opt_with_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
 	}
 	if (bOpt) {
 		for (int i = 0; i < predictions.size(); i++)
@@ -4009,16 +4047,16 @@ std::vector<double> eval_accuracy(const cv::Mat& seg_img, const cv::Mat& gt_img)
 	double recall = 1.0 * seg_tp / (seg_tp + seg_fn);
 	eval_metrix.push_back(precision);
 	eval_metrix.push_back(recall);
-	std::cout << "P = " << gt_p << std::endl;
+	/*std::cout << "P = " << gt_p << std::endl;
 	std::cout << "N = " << gt_n << std::endl;
 	std::cout << "TP = " << seg_tp << std::endl;
 	std::cout << "FN = " << seg_fn << std::endl;
 	std::cout << "TN = " << seg_tn << std::endl;
-	std::cout << "FP = " << seg_fp << std::endl;
+	std::cout << "FP = " << seg_fp << std::endl;*/
 	return eval_metrix;
 }
 
-std::vector<double> eval_accuracy_new(const cv::Mat& seg_img, const cv::Mat& gt_img) {
+std::vector<double> eval_accuracy_old(const cv::Mat& seg_img, const cv::Mat& gt_img) {
 	int gt_p = 0;
 	int seg_tp = 0;
 	int seg_fn = 0;
@@ -4040,11 +4078,14 @@ std::vector<double> eval_accuracy_new(const cv::Mat& seg_img, const cv::Mat& gt_
 	cv::Mat gt = (gt_b == 0) & (gt_r == 255);
 
 	gt_p = cv::countNonZero(gt);
-	gt_n = cv::countNonZero(~gt);
+	//gt_n = cv::countNonZero(~gt);
+	gt_n = gt.size().width * gt.size().height - gt_p;
 	seg_tp = cv::countNonZero(gt & seg);
-	seg_fn = cv::countNonZero(gt & ~seg);
+	//seg_fn = cv::countNonZero(gt & ~seg);
+	seg_fn = gt_p - seg_tp;
 	seg_tn = cv::countNonZero(~gt & ~seg);
-	seg_fp = cv::countNonZero(~gt & seg);
+	//seg_fp = cv::countNonZero(~gt & seg);
+	seg_fp = gt_n - seg_tn;
 
 	// return pixel accuracy and class accuracy
 	std::vector<double> eval_metrix;
@@ -4056,11 +4097,11 @@ std::vector<double> eval_accuracy_new(const cv::Mat& seg_img, const cv::Mat& gt_
 	double recall = 1.0 * seg_tp / (seg_tp + seg_fn);
 	eval_metrix.push_back(precision);
 	eval_metrix.push_back(recall);
-	std::cout << "P = " << gt_p << std::endl;
+	/*std::cout << "P = " << gt_p << std::endl;
 	std::cout << "N = " << gt_n << std::endl;
 	std::cout << "TP = " << seg_tp << std::endl;
 	std::cout << "FN = " << seg_fn << std::endl;
 	std::cout << "TN = " << seg_tn << std::endl;
-	std::cout << "FP = " << seg_fp << std::endl;
+	std::cout << "FP = " << seg_fp << std::endl;*/
 	return eval_metrix;
 }
