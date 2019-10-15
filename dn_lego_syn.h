@@ -113,6 +113,10 @@ void generate_synFacade(std::string src_image_name, std::vector<double> paras, s
 void test_affine_transformation(std::string image_path, std::string output_path);
 cv::Mat pix2pix_seg(cv::Mat& src_img, ModelInfo& mi);
 int blobs(cv::Mat& src_img);
+void img_convert(std::string images_path);
+void img_convert(std::string images_path, std::string segs_path);
+void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt);
+
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);
