@@ -10,8 +10,22 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	eval_seg_models("../data/test", "../data/test/pix2pix_256", "../seg_model.pt", 256, "../data/test/pix2pix_256.txt");
-	//adjust_seg_colors("../data/test/B", "../data/test/B_adjust");
+	int input_size = 128;
+	int d_size = 1;
+	std::string input_path = "../data/models_eval";
+	//std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
+	//std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
+	//std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
+	std::string output_path = "../data/models_eval/pix2pix_ensemble";
+	std::string model_path = "../data/models_eval";
+	std::string result_path = "../data/models_eval/pix2pix_ensemble.txt";
+	//std::cout << "input_path is " << input_path << std::endl;
+	//std::cout << "output_path is " << output_path << std::endl;
+	//std::cout << "model_path is " << model_path << std::endl;
+	//std::cout << "result_path is " << result_path << std::endl;
+	//eval_seg_models(input_path, output_path, model_path, input_size, result_path);
+	test_ensemble_models(input_path, output_path, model_path, result_path);
+	//adjust_seg_colors("../data/models_eval/B", "../data/models_eval/B_adjust");
 	//img_convert("D:/LEGO_meeting_summer_2019/1014/test/B");
 	//test_overlay_images("D:/LEGO_meeting_summer_2019/1014/test/A", "D:/LEGO_meeting_summer_2019/1014/test/B", "D:/LEGO_meeting_summer_2019/1014/test/overlay");
 	//
@@ -25,59 +39,61 @@ int main(int argc, const char* argv[]) {
 	eval_obj.eval(aoi + "/our_after_seg", aoi + "/gt", aoi + "/our_opt_v1_eval.txt");
 	eval_obj.eval(aoi + "/our_after_seg_without_blob", aoi + "/gt", aoi + "/our_opt_v2_eval.txt");
 	return 0;*/
-	std::string path(argv[1]);
-	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
-	ModelInfo mi;
-	readModeljson(argv[3], mi);
-	test_segmentation_model("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3", mi);
-	return 0;
-	std::clock_t start;
-	double duration;
-	start = std::clock();
-	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
-	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-	std::cout << "duration: " << duration << '\n';
-	return 0;
-	for (int i = 0; i < clusters.size(); i++) {
-		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
-		for (int j = 0; j < metaFiles.size(); j++) {
-			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-			std::cout << metajson << ", " << img_filename << std::endl;
-			/*if (img_filename != "0001_0048.png")
-				continue;*/
-			// read metajson
-			FacadeInfo fi;
-			readMetajson(metajson, fi);
-			ChipInfo chip;
-			bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
-			if (bvalid) {
-				cv::Mat dnn_img;
-				process_chip(chip, mi, mi.debug, img_filename);
-				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
-				std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
-				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
-					cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
-					cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
-					std::string img_name = fi.imgName;
-					cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-					synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
-				}
-			}
-			//writeMetajson(metajson, fi);
-		}
-	}
-	return 0;
+	//std::string path(argv[1]);
+	//std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
+	//ModelInfo mi;
+	//readModeljson(argv[3], mi);
+	//test_segmentation_model("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3", mi);
+	//return 0;
+	//std::clock_t start;
+	//double duration;
+	//start = std::clock();
+	//test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
+	//duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+	//std::cout << "duration: " << duration << '\n';
+	//return 0;
+	//for (int i = 0; i < clusters.size(); i++) {
+	//	std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
+	//	for (int j = 0; j < metaFiles.size(); j++) {
+	//		std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+	//		std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+	//		std::cout << metajson << ", " << img_filename << std::endl;
+	//		/*if (img_filename != "0001_0048.png")
+	//			continue;*/
+	//		// read metajson
+	//		FacadeInfo fi;
+	//		readMetajson(metajson, fi);
+	//		ChipInfo chip;
+	//		bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
+	//		if (bvalid) {
+	//			cv::Mat dnn_img;
+	//			process_chip(chip, mi, mi.debug, img_filename);
+	//			std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
+	//			std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
+	//			if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
+	//				cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
+	//				cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
+	//				std::string img_name = fi.imgName;
+	//				cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+	//				synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
+	//			}
+	//		}
+	//		//writeMetajson(metajson, fi);
+	//	}
+	//}
+	//return 0;
 }
 
 void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/A");
 	std::cout << "images size is " << images.size() << std::endl;
 	// load model
-	std::shared_ptr<torch::jit::script::Module> seg_module;
-	seg_module = torch::jit::load(model_path);
-	seg_module->to(at::kCUDA);
-	assert(mi.seg_module != nullptr);
+	std::cout << "model_path" << model_path << std::endl;
+	torch::jit::script::Module eval_seg_module = torch::jit::load(model_path);
+	//std::shared_ptr<torch::jit::script::Module> eval_seg_module = torch::jit::load(model_path);
+	//eval_seg_module->to(at::kCUDA);
+	eval_seg_module.to(at::kCUDA);
+	assert(eval_seg_module != nullptr);
 	std::ofstream out_param(results_txt, std::ios::app);
 	out_param << "facade_id";
 	out_param << ",";
@@ -92,88 +108,88 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	double avg_recall = 0;
 	for (int index = 0; index < images.size(); index++) {
 		std::string img_name = images_path + "/A/" + images[index];
-		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-		if (src_img.channels() == 4) // ensure there're 3 channels
-			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-		int run_times = 3;
-		// scale to seg size
-		cv::Mat scale_img;
-		cv::resize(src_img, scale_img, cv::Size(segImageSize, segImageSize));
-		cv::Mat dnn_img_rgb;
-		cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
-		cv::Mat img_float;
-		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
-		int channels = 3;
-		auto img_tensor = torch::from_blob(img_float.data, { 1, (int)segImageSize, segImageSize, channels }).to(torch::kCUDA);
-		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
-		img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
-		img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
-		img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+		//cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		//if (src_img.channels() == 4) // ensure there're 3 channels
+		//	cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		//int run_times = 3;
+		//// scale to seg size
+		//cv::Mat scale_img;
+		//cv::resize(src_img, scale_img, cv::Size(segImageSize, segImageSize));
+		//cv::Mat dnn_img_rgb;
+		//cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		//cv::Mat img_float;
+		//dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		//int channels = 3;
+		//auto img_tensor = torch::from_blob(img_float.data, { 1, (int)segImageSize, segImageSize, channels }).to(torch::kCUDA);
+		//img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		//img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
+		//img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+		//img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
 
-		std::vector<torch::jit::IValue> inputs;
-		inputs.push_back(img_tensor);
-		std::vector<std::vector<int>> color_mark;
-		color_mark.resize((int)segImageSize);
-		for (int i = 0; i < color_mark.size(); i++) {
-			color_mark[i].resize((int)segImageSize);
-			for (int j = 0; j < color_mark[i].size(); j++) {
-				color_mark[i][j] = 0;
-			}
-		}
-		// run three times
-		for (int i = 0; i < run_times; i++) {
-			torch::Tensor out_tensor;
-			// load segmentation model
-			out_tensor = seg_module->forward(inputs).toTensor();
-			out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
-			out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
-			//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
-			out_tensor = out_tensor.to(torch::kCPU);
-			cv::Mat resultImg((int)segImageSize, segImageSize, CV_8UC3);
-			std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
-			// gray img
-			// correct the color
-			for (int h = 0; h < resultImg.size().height; h++) {
-				for (int w = 0; w < resultImg.size().width; w++) {
-					if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
-						color_mark[h][w] += 0;
-					else
-						color_mark[h][w] += 1;
-				}
-			}
-		}
-		cv::Mat gray_img((int)segImageSize, (int)segImageSize, CV_8UC1);
-		int num_majority = ceil(0.5 * run_times);
-		for (int i = 0; i < color_mark.size(); i++) {
-			for (int j = 0; j < color_mark[i].size(); j++) {
-				if (color_mark[i][j] < num_majority)
-					gray_img.at<uchar>(i, j) = (uchar)0;
-				else
-					gray_img.at<uchar>(i, j) = (uchar)255;
-			}
-		}
-		// scale to grammar size
-		cv::Mat seg_img(src_img.size(), CV_8UC3);
-		cv::resize(gray_img, gray_img, src_img.size());
-		// correct the color
-		for (int i = 0; i < seg_img.size().height; i++) {
-			for (int j = 0; j < seg_img.size().width; j++) {
-				//noise
-				if ((int)gray_img.at<uchar>(i, j) < 128) {
-					seg_img.at<cv::Vec3b>(i, j)[0] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[2] = 255;
-				}
-				else {
-					seg_img.at<cv::Vec3b>(i, j)[0] = 255;
-					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[2] = 0;
-				}
-			}
-		}
-		std::string output_img_name = output_path + "/" + images[index];
-		cv::imwrite(output_img_name, seg_img);
-
+		//std::vector<torch::jit::IValue> inputs;
+		//inputs.push_back(img_tensor);
+		//std::vector<std::vector<int>> color_mark;
+		//color_mark.resize((int)segImageSize);
+		//for (int i = 0; i < color_mark.size(); i++) {
+		//	color_mark[i].resize((int)segImageSize);
+		//	for (int j = 0; j < color_mark[i].size(); j++) {
+		//		color_mark[i][j] = 0;
+		//	}
+		//}
+		//// run three times
+		//for (int i = 0; i < run_times; i++) {
+		//	torch::Tensor out_tensor;
+		//	// load segmentation model
+		//	out_tensor = eval_seg_module.forward(inputs).toTensor();
+		//	out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
+		//	out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
+		//	//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
+		//	out_tensor = out_tensor.to(torch::kCPU);
+		//	cv::Mat resultImg((int)segImageSize, segImageSize, CV_8UC3);
+		//	std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
+		//	// gray img
+		//	// correct the color
+		//	for (int h = 0; h < resultImg.size().height; h++) {
+		//		for (int w = 0; w < resultImg.size().width; w++) {
+		//			if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
+		//				color_mark[h][w] += 0;
+		//			else
+		//				color_mark[h][w] += 1;
+		//		}
+		//	}
+		//}
+		//cv::Mat gray_img((int)segImageSize, (int)segImageSize, CV_8UC1);
+		//int num_majority = ceil(0.5 * run_times);
+		//for (int i = 0; i < color_mark.size(); i++) {
+		//	for (int j = 0; j < color_mark[i].size(); j++) {
+		//		if (color_mark[i][j] < num_majority)
+		//			gray_img.at<uchar>(i, j) = (uchar)0;
+		//		else
+		//			gray_img.at<uchar>(i, j) = (uchar)255;
+		//	}
+		//}
+		//// scale to grammar size
+		//cv::Mat seg_img(src_img.size(), CV_8UC3);
+		//cv::resize(gray_img, gray_img, src_img.size());
+		//// correct the color
+		//for (int i = 0; i < seg_img.size().height; i++) {
+		//	for (int j = 0; j < seg_img.size().width; j++) {
+		//		//noise
+		//		if ((int)gray_img.at<uchar>(i, j) < 128) {
+		//			seg_img.at<cv::Vec3b>(i, j)[0] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[2] = 255;
+		//		}
+		//		else {
+		//			seg_img.at<cv::Vec3b>(i, j)[0] = 255;
+		//			seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[2] = 0;
+		//		}
+		//	}
+		//}
+		//std::string output_img_name = output_path + "/" + images[index];
+		//cv::imwrite(output_img_name, seg_img);
+		cv::Mat seg_img = cv::imread(output_path + "/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
 		//eval
 		cv::Mat gt_img = cv::imread(images_path + "/B/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
 		std::vector<double> evaluations = eval_accuracy(seg_img, gt_img);
@@ -198,6 +214,93 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	out_param << avg_recall / images.size();
 	out_param << "\n";
 }
+
+void test_ensemble_models(std::string images_path, std::string output_path, std::string model_imgs_path, std::string results_txt) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/A");
+	std::cout << "images size is " << images.size() << std::endl;
+	std::ofstream out_param(results_txt, std::ios::app);
+	out_param << "facade_id";
+	out_param << ",";
+	out_param << "pAccuracy";
+	out_param << ",";
+	out_param << "precision";
+	out_param << ",";
+	out_param << "recall";
+	out_param << "\n";
+	double avg_accuracy = 0;
+	double avg_precision = 0;
+	double avg_recall = 0;
+	for (int index = 0; index < images.size(); index++) {
+		cv::Mat gt_img = cv::imread(images_path + "/B/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat seg_img_v1 = cv::imread(model_imgs_path + "/pix2pix_256_D3/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat seg_img_v2 = cv::imread(model_imgs_path + "/pix2pix_128_D3/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat seg_img_v3 = cv::imread(model_imgs_path + "/pix2pix_96_D3/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat seg_img(gt_img.size(), CV_8UC3);
+		std::vector<std::vector<int>> color_mark;
+		color_mark.resize(gt_img.size().height);
+		for (int i = 0; i < color_mark.size(); i++) {
+			color_mark[i].resize(gt_img.size().width);
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				color_mark[i][j] = 0;
+			}
+		}
+		// correct the color
+		for (int h = 0; h < gt_img.size().height; h++) {
+			for (int w = 0; w < gt_img.size().width; w++) {
+				if (seg_img_v1.at<cv::Vec3b>(h, w)[0] == 255)
+					color_mark[h][w] += 0;
+				else
+					color_mark[h][w] += 1;
+				if (seg_img_v2.at<cv::Vec3b>(h, w)[0] == 255)
+					color_mark[h][w] += 0;
+				else
+					color_mark[h][w] += 1;
+				if (seg_img_v3.at<cv::Vec3b>(h, w)[0] == 255)
+					color_mark[h][w] += 0;
+				else
+					color_mark[h][w] += 1;
+			}
+		}
+		int num_majority = ceil(0.5 * 3);
+		for (int i = 0; i < color_mark.size(); i++) {
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				if (color_mark[i][j] >= num_majority) {
+					seg_img.at<cv::Vec3b>(i, j)[0] = 0;
+					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_img.at<cv::Vec3b>(i, j)[2] = 255;
+				}
+				else {
+					seg_img.at<cv::Vec3b>(i, j)[0] = 255;
+					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+					seg_img.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+			}
+		}
+		std::string output_img_name = output_path + "/" + images[index];
+		cv::imwrite(output_img_name, seg_img);
+		std::vector<double> evaluations = eval_accuracy(seg_img, gt_img);
+		out_param << images[index];
+		out_param << ",";
+		out_param << evaluations[0];
+		out_param << ",";
+		out_param << evaluations[1];
+		out_param << ",";
+		out_param << evaluations[2];
+		out_param << "\n";
+		avg_accuracy += evaluations[0];
+		avg_precision += evaluations[1];
+		avg_recall += evaluations[2];
+	}
+	out_param << "Average_Score";
+	out_param << ",";
+	out_param << avg_accuracy / images.size();
+	out_param << ",";
+	out_param << avg_precision / images.size();
+	out_param << ",";
+	out_param << avg_recall / images.size();
+	out_param << "\n";
+}
+
 
 void test_affine_transformation(std::string image_path, std::string output_path) {
 	std::vector<std::string> images = get_all_files_names_within_folder(image_path);
@@ -1981,7 +2084,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.paddingSize = util::read1DArray(docModel, "paddingSize");
 	std::string reject_model = util::readStringValue(docModel, "reject_model");
 	// load reject model
-	mi.reject_classifier_module = torch::jit::load(reject_model);
+	//mi.reject_classifier_module = torch::jit::load(reject_model);
 	mi.reject_classifier_module->to(at::kCUDA);
 	assert(mi.reject_classifier_module != nullptr);
 	// segmentation model type
@@ -1990,7 +2093,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		// load segmentation_pan model
 		std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
 		// load segmentation model
-		mi.seg_module_pan = torch::jit::load(seg_model_pan);
+		//mi.seg_module_pan = torch::jit::load(seg_model_pan);
 		mi.seg_module_pan->to(at::kCUDA);
 		assert(mi.seg_module_pan != nullptr);
 	}
@@ -1998,14 +2101,14 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		// load segmentation_histeq model
 		std::string seg_model_histeq = util::readStringValue(docModel, "seg_model_histeq");
 		// load segmentation model
-		mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
+		//mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
 		mi.seg_module_histeq->to(at::kCUDA);
 		assert(mi.seg_module_histeq != nullptr);
 	}
 	else{
 		std::string seg_model = util::readStringValue(docModel, "seg_model");
 		// load segmentation model
-		mi.seg_module = torch::jit::load(seg_model);
+		//mi.seg_module = torch::jit::load(seg_model);
 		mi.seg_module->to(at::kCUDA);
 		assert(mi.seg_module != nullptr);
 	}
@@ -2020,7 +2123,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	// path of DN model
 	std::string classifier_path = util::readStringValue(grammar_classifier, "model");
 	// load grammar classifier model
-	mi.classifier_module = torch::jit::load(classifier_path);
+	//mi.classifier_module = torch::jit::load(classifier_path);
 	mi.classifier_module->to(at::kCUDA);
 	assert(mi.classifier_module != nullptr);
 	mi.number_grammars = util::readNumber(grammar_classifier, "number_paras", 6);
@@ -2041,7 +2144,7 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		// path of DN model
 		mi.grammars[i].grammar_id = i + 1;
 		std::string model_path = util::readStringValue(grammar, "model");
-		mi.grammars[i].grammar_model = torch::jit::load(model_path);
+		//mi.grammars[i].grammar_model = torch::jit::load(model_path);
 		mi.grammars[i].grammar_model->to(at::kCUDA);
 		assert(mi.grammars[i].grammar_model != nullptr);
 		// number of paras
