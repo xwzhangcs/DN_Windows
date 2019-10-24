@@ -10,15 +10,15 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	int input_size = 256;
-	int d_size = 1;
-	std::string input_path = "../data/models_eval";
+	//int input_size = 256;
+	//int d_size = 1;
+	//std::string input_path = "../data/models_eval";
 	//std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
 	//std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
 	//std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
-	std::string output_path = "../data/models_eval/pix2pix_test";
-	std::string model_path = "../data/models_eval";
-	std::string result_path = "../data/models_eval/pix2pix_test.txt";
+	//std::string output_path = "../data/models_eval/deeplab";
+	//std::string model_path = "../data/models_eval";
+	//std::string result_path = "../data/models_eval/deeplab.txt";
 	//std::cout << "input_path is " << input_path << std::endl;
 	//std::cout << "output_path is " << output_path << std::endl;
 	//std::cout << "model_path is " << model_path << std::endl;
@@ -29,6 +29,14 @@ int main(int argc, const char* argv[]) {
 	//img_convert("D:/LEGO_meeting_summer_2019/1014/test/B");
 	//test_overlay_images("D:/LEGO_meeting_summer_2019/1014/test/A", "D:/LEGO_meeting_summer_2019/1014/test/B", "D:/LEGO_meeting_summer_2019/1014/test/overlay");
 	//
+	//img_convert("../data/models_eval/A");
+	//findPatches("../data/patch/src.png", "../data/patch", 20);
+	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/gt", "D:/LEGO_meeting_summer_2019/1023/fig_all/gt_out");
+	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/pix2pix", "D:/LEGO_meeting_summer_2019/1023/fig_all/pix2pix_out");
+	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/image_inpainting", "D:/LEGO_meeting_summer_2019/1023/fig_all/image_inpainting_out");
+	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_out");
+	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_plus", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_plus_out");
+
 	return 0;
 	/*std::string aoi = "../data/metrics/eval";
 	FacadeSeg eval_obj;
@@ -89,11 +97,11 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	std::cout << "images size is " << images.size() << std::endl;
 	// load model
 	std::cout << "model_path" << model_path << std::endl;
-	torch::jit::script::Module eval_seg_module = torch::jit::load(model_path);
+	//torch::jit::script::Module eval_seg_module = torch::jit::load(model_path);
 	//std::shared_ptr<torch::jit::script::Module> eval_seg_module = torch::jit::load(model_path);
 	//eval_seg_module->to(at::kCUDA);
-	eval_seg_module.to(at::kCUDA);
-	assert(eval_seg_module != nullptr);
+	//eval_seg_module.to(at::kCUDA);
+	//assert(eval_seg_module != nullptr);
 	std::ofstream out_param(results_txt, std::ios::app);
 	out_param << "facade_id";
 	out_param << ",";
@@ -107,89 +115,89 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	double avg_precision = 0;
 	double avg_recall = 0;
 	for (int index = 0; index < images.size(); index++) {
-		std::string img_name = images_path + "/A/" + images[index];
-		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-		if (src_img.channels() == 4) // ensure there're 3 channels
-			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-		int run_times = 3;
-		// scale to seg size
-		cv::Mat scale_img;
-		cv::resize(src_img, scale_img, cv::Size(segImageSize, segImageSize));
-		cv::Mat dnn_img_rgb;
-		cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
-		cv::Mat img_float;
-		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
-		int channels = 3;
-		auto img_tensor = torch::from_blob(img_float.data, { 1, (int)segImageSize, segImageSize, channels }).to(torch::kCUDA);
-		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
-		img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
-		img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
-		img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+		//std::string img_name = images_path + "/A/" + images[index];
+		//cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		//if (src_img.channels() == 4) // ensure there're 3 channels
+		//	cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		//int run_times = 3;
+		//// scale to seg size
+		//cv::Mat scale_img;
+		//cv::resize(src_img, scale_img, cv::Size(segImageSize, segImageSize));
+		//cv::Mat dnn_img_rgb;
+		//cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		//cv::Mat img_float;
+		//dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		//int channels = 3;
+		//auto img_tensor = torch::from_blob(img_float.data, { 1, (int)segImageSize, segImageSize, channels }).to(torch::kCUDA);
+		//img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		//img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
+		//img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+		//img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
 
-		std::vector<torch::jit::IValue> inputs;
-		inputs.push_back(img_tensor);
-		std::vector<std::vector<int>> color_mark;
-		color_mark.resize((int)segImageSize);
-		for (int i = 0; i < color_mark.size(); i++) {
-			color_mark[i].resize((int)segImageSize);
-			for (int j = 0; j < color_mark[i].size(); j++) {
-				color_mark[i][j] = 0;
-			}
-		}
-		// run three times
-		for (int i = 0; i < run_times; i++) {
-			torch::Tensor out_tensor;
-			// load segmentation model
-			out_tensor = eval_seg_module.forward(inputs).toTensor();
-			out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
-			out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
-			//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
-			out_tensor = out_tensor.to(torch::kCPU);
-			cv::Mat resultImg((int)segImageSize, segImageSize, CV_8UC3);
-			std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
-			// gray img
-			// correct the color
-			for (int h = 0; h < resultImg.size().height; h++) {
-				for (int w = 0; w < resultImg.size().width; w++) {
-					if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
-						color_mark[h][w] += 0;
-					else
-						color_mark[h][w] += 1;
-				}
-			}
-		}
-		cv::Mat gray_img((int)segImageSize, (int)segImageSize, CV_8UC1);
-		int num_majority = ceil(0.5 * run_times);
-		for (int i = 0; i < color_mark.size(); i++) {
-			for (int j = 0; j < color_mark[i].size(); j++) {
-				if (color_mark[i][j] < num_majority)
-					gray_img.at<uchar>(i, j) = (uchar)0;
-				else
-					gray_img.at<uchar>(i, j) = (uchar)255;
-			}
-		}
-		// scale to grammar size
-		cv::Mat seg_img(src_img.size(), CV_8UC3);
-		cv::resize(gray_img, gray_img, src_img.size());
-		// correct the color
-		for (int i = 0; i < seg_img.size().height; i++) {
-			for (int j = 0; j < seg_img.size().width; j++) {
-				//noise
-				if ((int)gray_img.at<uchar>(i, j) < 128) {
-					seg_img.at<cv::Vec3b>(i, j)[0] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[2] = 255;
-				}
-				else {
-					seg_img.at<cv::Vec3b>(i, j)[0] = 255;
-					seg_img.at<cv::Vec3b>(i, j)[1] = 0;
-					seg_img.at<cv::Vec3b>(i, j)[2] = 0;
-				}
-			}
-		}
-		std::string output_img_name = output_path + "/" + images[index];
-		cv::imwrite(output_img_name, seg_img);
-		//cv::Mat seg_img = cv::imread(output_path + "/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		//std::vector<torch::jit::IValue> inputs;
+		//inputs.push_back(img_tensor);
+		//std::vector<std::vector<int>> color_mark;
+		//color_mark.resize((int)segImageSize);
+		//for (int i = 0; i < color_mark.size(); i++) {
+		//	color_mark[i].resize((int)segImageSize);
+		//	for (int j = 0; j < color_mark[i].size(); j++) {
+		//		color_mark[i][j] = 0;
+		//	}
+		//}
+		//// run three times
+		//for (int i = 0; i < run_times; i++) {
+		//	torch::Tensor out_tensor;
+		//	// load segmentation model
+		//	out_tensor = eval_seg_module.forward(inputs).toTensor();
+		//	out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
+		//	out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
+		//	//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
+		//	out_tensor = out_tensor.to(torch::kCPU);
+		//	cv::Mat resultImg((int)segImageSize, segImageSize, CV_8UC3);
+		//	std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
+		//	// gray img
+		//	// correct the color
+		//	for (int h = 0; h < resultImg.size().height; h++) {
+		//		for (int w = 0; w < resultImg.size().width; w++) {
+		//			if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
+		//				color_mark[h][w] += 0;
+		//			else
+		//				color_mark[h][w] += 1;
+		//		}
+		//	}
+		//}
+		//cv::Mat gray_img((int)segImageSize, (int)segImageSize, CV_8UC1);
+		//int num_majority = ceil(0.5 * run_times);
+		//for (int i = 0; i < color_mark.size(); i++) {
+		//	for (int j = 0; j < color_mark[i].size(); j++) {
+		//		if (color_mark[i][j] < num_majority)
+		//			gray_img.at<uchar>(i, j) = (uchar)0;
+		//		else
+		//			gray_img.at<uchar>(i, j) = (uchar)255;
+		//	}
+		//}
+		//// scale to grammar size
+		//cv::Mat seg_img(src_img.size(), CV_8UC3);
+		//cv::resize(gray_img, gray_img, src_img.size());
+		//// correct the color
+		//for (int i = 0; i < seg_img.size().height; i++) {
+		//	for (int j = 0; j < seg_img.size().width; j++) {
+		//		//noise
+		//		if ((int)gray_img.at<uchar>(i, j) < 128) {
+		//			seg_img.at<cv::Vec3b>(i, j)[0] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[2] = 255;
+		//		}
+		//		else {
+		//			seg_img.at<cv::Vec3b>(i, j)[0] = 255;
+		//			seg_img.at<cv::Vec3b>(i, j)[1] = 0;
+		//			seg_img.at<cv::Vec3b>(i, j)[2] = 0;
+		//		}
+		//	}
+		//}
+		//std::string output_img_name = output_path + "/" + images[index];
+		//cv::imwrite(output_img_name, seg_img);
+		cv::Mat seg_img = cv::imread(output_path + "/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
 		//eval
 		cv::Mat gt_img = cv::imread(images_path + "/B/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
 		std::vector<double> evaluations = eval_accuracy(seg_img, gt_img);
@@ -948,6 +956,8 @@ void findPatches(std::string image_name, std::string output_path, int step) {
 	{
 		cv::Scalar color = cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 		cv::rectangle(drawing, rectangles[index], color, 1, 8);
+		cv::Mat croppedImage = src_img(rectangles[index]);
+		cv::imwrite(output_path + "/chip_" + std::to_string(index) + ".png", croppedImage);
 	}
 	cv::imwrite("../data/patch.png", drawing);
 }
@@ -1087,35 +1097,23 @@ void test_color(std::string image_1_path, std::string image_2_path, std::string 
 			int win_count = 0;
 			for (int i = 0; i < src_2.size().height; i++) {
 				for (int j = 0; j < src_2.size().width; j++) {
-					if ((int)src_2.at<uchar>(i, j) == 0) {
-						if (src_1.channels() == 4) {
-							win_avg_color.val[0] += src_1.at<cv::Vec4b>(i, j)[0];
-							win_avg_color.val[1] += src_1.at<cv::Vec4b>(i, j)[1];
-							win_avg_color.val[2] += src_1.at<cv::Vec4b>(i, j)[2];
-						}
-						if (src_1.channels() == 3) {
-							win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
-							win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
-							win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
-						}
+					if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
+						win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+						win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+						win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
 						win_count++;
 					}
 					else {
-						if (src_1.channels() == 4) {
-							bg_avg_color.val[0] += src_1.at<cv::Vec4b>(i, j)[0];
-							bg_avg_color.val[1] += src_1.at<cv::Vec4b>(i, j)[1];
-							bg_avg_color.val[2] += src_1.at<cv::Vec4b>(i, j)[2];
-						}
-						if (src_1.channels() == 3) {
-							bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
-							bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
-							bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
-						}
+						bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+						bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+						bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
 						bg_count++;
 					}
 				}
 			}
 			if (win_count > 0) {
+				if (i == 4)
+					win_count -= 100;
 				win_avg_color.val[0] = win_avg_color.val[0] / win_count;
 				win_avg_color.val[1] = win_avg_color.val[1] / win_count;
 				win_avg_color.val[2] = win_avg_color.val[2] / win_count;
@@ -1128,7 +1126,7 @@ void test_color(std::string image_1_path, std::string image_2_path, std::string 
 		}
 		for (int i = 0; i < src_2.size().height; i++) {
 			for (int j = 0; j < src_2.size().width; j++) {
-				if ((int)src_2.at<uchar>(i, j) == 0) {
+				if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
 					outpt_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
 					outpt_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
 					outpt_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
@@ -1672,31 +1670,38 @@ void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) 
 
 void img_convert(std::string images_path) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	std::vector<std::string> images_seg = get_all_files_names_within_folder("../data/models_eval/deeplab_src/");
 	std::cout << "images size is " << images.size() << std::endl;
 	for (int i = 0; i < images.size(); i++) {
 		std::string image_name = images_path + '/' + images[i];
 		cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) {// ensure there're 3 channels
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-			cv::imwrite(image_name, src_img);
+			//cv::imwrite(image_name, src_img);
 		}
+		cv::Mat output_img = cv::imread("../data/models_eval/deeplab_src/" + images_seg[i], CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat scale_img;
+		cv::resize(output_img, scale_img, src_img.size());
 		//cv::Mat src_img = cv::imread("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3/B/facade_00061.png", CV_LOAD_IMAGE_UNCHANGED);
 		//if (src_img.channels() == 4)
 		//	cv::cvtColor(src_img.clone(), src_img, CV_BGRA2BGR);
-		//for (int i = 0; i < src_img.size().height; i++) {
-		//	for (int j = 0; j < src_img.size().width; j++) {
-		//		// wall
-		//		if (src_img.at<cv::Vec3b>(i, j)[0] == 0 && src_img.at<cv::Vec3b>(i, j)[1] == 0 && src_img.at<cv::Vec3b>(i, j)[2] == 255) {
-		//			
-		//		}
-		//		else
-		//		{
-		//			src_img.at<cv::Vec3b>(i, j)[0] = 255;
-		//			src_img.at<cv::Vec3b>(i, j)[1] = 0;
-		//			src_img.at<cv::Vec3b>(i, j)[2] = 0;
-		//		}
-		//	}
-		//}
+		for (int i = 0; i < scale_img.size().height; i++) {
+			for (int j = 0; j < scale_img.size().width; j++) {
+				// wall
+				if (scale_img.at<cv::Vec3b>(i, j)[0] == 0 && scale_img.at<cv::Vec3b>(i, j)[1] == 0 && scale_img.at<cv::Vec3b>(i, j)[2] == 0) {
+					scale_img.at<cv::Vec3b>(i, j)[0] = 255;
+					scale_img.at<cv::Vec3b>(i, j)[1] = 0;
+					scale_img.at<cv::Vec3b>(i, j)[2] = 0;
+				}
+				else
+				{
+					scale_img.at<cv::Vec3b>(i, j)[0] = 0;
+					scale_img.at<cv::Vec3b>(i, j)[1] = 0;
+					scale_img.at<cv::Vec3b>(i, j)[2] = 255;
+				}
+			}
+		}
+		cv::imwrite("../data/models_eval/deeplab/" + images[i], scale_img);
 	}
 }
 
