@@ -37,7 +37,7 @@ struct FacadeInfo {
 
 // Hold information about Grammars
 struct Grammar {
-	std::shared_ptr<torch::jit::script::Module> grammar_model;
+	torch::jit::script::Module grammar_model;
 	int number_paras;
 	int grammar_id;
 	std::vector<double> rangeOfRows;
@@ -67,12 +67,12 @@ struct ModelInfo {
 	std::vector<double> targetChipSize;
 	std::vector<double> segImageSize;
 	Grammar grammars[6];
-	std::shared_ptr<torch::jit::script::Module> classifier_module;
+	torch::jit::script::Module classifier_module;
 	int number_grammars;
-	std::shared_ptr<torch::jit::script::Module> reject_classifier_module;
-	std::shared_ptr<torch::jit::script::Module> seg_module;
-	std::shared_ptr<torch::jit::script::Module> seg_module_pan;
-	std::shared_ptr<torch::jit::script::Module> seg_module_histeq;
+	torch::jit::script::Module reject_classifier_module;
+	torch::jit::script::Module seg_module;
+	torch::jit::script::Module seg_module_pan;
+	torch::jit::script::Module seg_module_histeq;
 	int seg_module_type;
 	bool bOpt;
 	int opt_step;

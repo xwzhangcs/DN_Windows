@@ -31,65 +31,129 @@ int main(int argc, const char* argv[]) {
 	//
 	//img_convert("../data/models_eval/A");
 	//findPatches("../data/patch/src.png", "../data/patch", 20);
-	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/gt", "D:/LEGO_meeting_summer_2019/1023/fig_all/gt_out");
-	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/pix2pix", "D:/LEGO_meeting_summer_2019/1023/fig_all/pix2pix_out");
-	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/image_inpainting", "D:/LEGO_meeting_summer_2019/1023/fig_all/image_inpainting_out");
-	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_out");
-	test_color("D:/LEGO_meeting_summer_2019/1023/fig_all/src", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_plus", "D:/LEGO_meeting_summer_2019/1023/fig_all/ours_plus_out");
-
-	return 0;
-	/*std::string aoi = "../data/metrics/eval";
-	FacadeSeg eval_obj;
-	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
-	eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
-	eval_obj.eval(aoi + "/our_before", aoi + "/gt", aoi + "/our_eval.txt");
-	eval_obj.eval(aoi + "/our_after_gt", aoi + "/gt", aoi + "/our_opt_gt_eval.txt");
-	eval_obj.eval(aoi + "/our_after_seg", aoi + "/gt", aoi + "/our_opt_v1_eval.txt");
-	eval_obj.eval(aoi + "/our_after_seg_without_blob", aoi + "/gt", aoi + "/our_opt_v2_eval.txt");
-	return 0;*/
-	//std::string path(argv[1]);
-	//std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
-	//ModelInfo mi;
-	//readModeljson(argv[3], mi);
+	//return 0;
+	//std::string aoi = "../data/metrics_55/eval";
+	//FacadeSeg eval_obj;
+	//eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
+	////eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
+	//eval_obj.eval(aoi + "/our_seg", aoi + "/gt", aoi + "/our_eval.txt");
+	//eval_obj.eval(aoi + "/our_seg_opt", aoi + "/gt", aoi + "/our_opt_eval.txt");
+	std::string path(argv[1]);
+	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
+	ModelInfo mi;
+	readModeljson(argv[3], mi);
 	//test_segmentation_model("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3", mi);
 	//return 0;
-	//std::clock_t start;
-	//double duration;
-	//start = std::clock();
-	//test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
-	//duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-	//std::cout << "duration: " << duration << '\n';
-	//return 0;
-	//for (int i = 0; i < clusters.size(); i++) {
-	//	std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
-	//	for (int j = 0; j < metaFiles.size(); j++) {
-	//		std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-	//		std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-	//		std::cout << metajson << ", " << img_filename << std::endl;
-	//		/*if (img_filename != "0001_0048.png")
-	//			continue;*/
-	//		// read metajson
-	//		FacadeInfo fi;
-	//		readMetajson(metajson, fi);
-	//		ChipInfo chip;
-	//		bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
-	//		if (bvalid) {
-	//			cv::Mat dnn_img;
-	//			process_chip(chip, mi, mi.debug, img_filename);
-	//			std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
-	//			std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
-	//			if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
-	//				cv::Scalar win_avg_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
-	//				cv::Scalar bg_avg_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
-	//				std::string img_name = fi.imgName;
-	//				cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-	//				synthesis(predictions, chip.seg_image.size(), mi.dnnsOutFolder, win_avg_color, bg_avg_color, mi.debug, img_filename);
-	//			}
-	//		}
-	//		//writeMetajson(metajson, fi);
-	//	}
-	//}
-	//return 0;
+	/*std::clock_t start;
+	double duration;
+	start = std::clock();
+	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
+	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+	std::cout << "duration: " << duration << '\n';
+	return 0;*/
+	for (int i = 0; i < clusters.size(); i++) {
+		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
+		for (int j = 0; j < metaFiles.size(); j++) {
+			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+			std::cout << metajson << ", " << img_filename << std::endl;
+			/*if (img_filename != "0001_0048.png")
+				continue;*/
+			// read metajson
+			FacadeInfo fi;
+			readMetajson(metajson, fi);
+			ChipInfo chip;
+			bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
+			if (bvalid) {
+				cv::Mat dnn_img;
+				process_chip(chip, mi, mi.debug, img_filename);
+				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
+				std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
+				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
+					cv::Scalar win_real_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
+					cv::Scalar bg_real_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
+					std::string img_name = fi.imgName;
+					cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+					std::cout << "img_name is " << img_name << std::endl;
+					// compute windows or doors for the whole facade image
+					if (predictions.size() == 5) {
+						predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
+						predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+					}
+					if (predictions.size() == 8) {
+						predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
+						predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+						predictions[3] = int(predictions[3] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+					}
+					// our results without opt
+					synthesis(predictions, src_facade.size(), mi.dnnsOutFolder, win_real_color, bg_real_color, mi.debug, img_filename);
+					// our results with opt
+					cv::Mat seg_rgb = cv::imread("../data/pix2pix/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
+					cv::Mat gt_img = cv::imread("../data/gt/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
+					double score_opt = 0;
+					bool bOpt = true;
+					std::vector<double> predictions_opt;
+					std::vector<double> trans_opt;
+					if (predictions.size() == 5 && bOpt) {
+						opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
+						//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
+					}
+					if (predictions.size() == 8 && bOpt) {
+						opt_with_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
+					}
+					/*cv::Scalar win_avg_color(0, 0, 255, 0);
+					cv::Scalar bg_avg_color(255, 0, 0, 0);
+					cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
+					cv::Scalar win_seg_color(0, 0, 255, 0);
+					cv::Scalar bg_seg_color(255, 0, 0, 0);
+					int gt_blobs = blobs(gt_img);
+					cv::Mat syn_img = synthesis(predictions, src_facade.size(), "../data", win_seg_color, bg_seg_color, false, "syn.png");
+					std::vector<double> evaluations = eval_accuracy(syn_img, gt_img);
+					int tmp_blobs = 0;
+					if (predictions.size() == 5)
+						tmp_blobs = predictions[0] * predictions[1];
+					else
+						tmp_blobs = predictions[0] * predictions[1] + predictions[3];
+					double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+					//double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
+					double score = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+					//double score = 0.5 * evaluations[1] + 0.5 *evaluations[2];
+					std::cout << "score before is " << score << std::endl;
+					std::cout << "predictions[0] is " << predictions[0] << std::endl;
+					std::cout << "predictions[1] is " << predictions[1] << std::endl;
+					std::cout << "predictions[3] is " << predictions[3] << std::endl;
+					std::cout << "predictions[4] is " << predictions[4] << std::endl;
+					std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
+					cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_facade.size(), win_seg_color, bg_seg_color, true, "../data/seg_opt/" + img_filename);
+					cv::imwrite("../data/test.png", seg_rgb);
+
+					std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, gt_img);
+					std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
+					std::cout << "predictions_opt[1] is " << predictions_opt[1] << std::endl;
+					std::cout << "predictions_opt[3] is " << predictions_opt[3] << std::endl;
+					std::cout << "predictions_opt[4] is " << predictions_opt[4] << std::endl;
+					std::cout << "predictions_opt[5] is " << predictions_opt[5] << std::endl;
+					std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
+					std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
+					std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
+					if (predictions.size() == 5)
+						tmp_blobs = predictions_opt[0] * predictions_opt[1];
+					else
+						tmp_blobs = predictions_opt[0] * predictions_opt[1] + predictions_opt[3];
+					blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+					std::cout << "evaluations_opt[0] is " << evaluations_opt[0] << std::endl;
+					std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
+					std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
+					//score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
+					score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
+					//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
+					std::cout << "score after is " << score << std::endl;
+				}
+			}
+			//writeMetajson(metajson, fi);
+		}
+	}
+	return 0;
 }
 
 void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt) {
@@ -309,7 +373,6 @@ void test_ensemble_models(std::string images_path, std::string output_path, std:
 	out_param << "\n";
 }
 
-
 void test_affine_transformation(std::string image_path, std::string output_path) {
 	std::vector<std::string> images = get_all_files_names_within_folder(image_path);
 	std::cout << "images size is " << images.size() << std::endl;
@@ -468,7 +531,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		if (true)
 		{
 			// Deserialize the ScriptModule from a file using torch::jit::load().
-			torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+			torch::Tensor out_tensor = mi.classifier_module.forward(inputs).toTensor();
 			//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
 
 			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
@@ -490,7 +553,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		// number of paras
 		int num_paras = mi.grammars[best_class - 1].number_paras;
 
-		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
+		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model.forward(inputs).toTensor();
 		std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
 		std::vector<double> paras;
 		for (int i = 0; i < num_paras; i++) {
@@ -668,10 +731,10 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 		for (int v2 = -2; v2 <= 2; v2++) {
 			for (int v3 = v3_min; v3 <= v3_max; v3++) {
 				for (int v4 = v4_min; v4 <= v4_max; v4++) {
-					for (int m_t = 0; m_t <= 5; m_t++) {
-						for (int m_b = 0; m_b <= 5; m_b++) {
-							for (int m_l = 0; m_l <= 5; m_l++) {
-								for (int m_r = 0; m_r <= 5; m_r++) {
+					for (int m_t = 0; m_t <= 2; m_t++) {
+						for (int m_b = 0; m_b <= 2; m_b++) {
+							for (int m_l = 8; m_l <= 12; m_l++) {
+								for (int m_r = 8; m_r <= 12; m_r++) {
 									std::vector<double> predictions_tmp;
 									predictions_tmp.push_back(v1 + predictions_init[0]);
 									predictions_tmp.push_back(v2 + predictions_init[1]);
@@ -1166,7 +1229,7 @@ void test_rejection_model(std::string images_path, ModelInfo& mi) {
 
 		std::vector<torch::jit::IValue> inputs;
 		inputs.push_back(img_tensor);
-		torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+		torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
 
 		torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 
@@ -1221,7 +1284,7 @@ void test_chip_choose(std::string images_path, std::string output, ModelInfo& mi
 
 			std::vector<torch::jit::IValue> inputs;
 			inputs.push_back(img_tensor);
-			torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+			torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
 
 			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 			double tmp = log(confidences_tensor.slice(1, 1, 2).item<float>());
@@ -1301,13 +1364,13 @@ void test_segmentation_model(std::string images_path, ModelInfo& mi) {
 		for (int i = 0; i < run_times; i++) {
 			torch::Tensor out_tensor;
 			if (mi.seg_module_type == 0) {
-				out_tensor = mi.seg_module->forward(inputs).toTensor();
+				out_tensor = mi.seg_module.forward(inputs).toTensor();
 			}
 			else if (mi.seg_module_type == 1) {
-				out_tensor = mi.seg_module_histeq->forward(inputs).toTensor();
+				out_tensor = mi.seg_module_histeq.forward(inputs).toTensor();
 			}
 			else {
-				out_tensor = mi.seg_module_pan->forward(inputs).toTensor();
+				out_tensor = mi.seg_module_pan.forward(inputs).toTensor();
 			}
 			out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
 			out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
@@ -1472,7 +1535,7 @@ cv::Mat pix2pix_seg(cv::Mat& src_img, ModelInfo& mi) {
 	// run three times
 	for (int i = 0; i < run_times; i++) {
 		torch::Tensor out_tensor;
-		out_tensor = mi.seg_module->forward(inputs).toTensor();
+		out_tensor = mi.seg_module.forward(inputs).toTensor();
 		out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
 		out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
 		//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
@@ -1608,7 +1671,7 @@ void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) 
 		if (true)
 		{
 			// Deserialize the ScriptModule from a file using torch::jit::load().
-			torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+			torch::Tensor out_tensor = mi.classifier_module.forward(inputs).toTensor();
 			//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
 
 			torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
@@ -1630,7 +1693,7 @@ void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) 
 		// number of paras
 		int num_paras = mi.grammars[best_class - 1].number_paras;
 
-		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
+		torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model.forward(inputs).toTensor();
 		std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
 		std::vector<double> paras;
 		for (int i = 0; i < num_paras; i++) {
@@ -1670,38 +1733,31 @@ void test_classifier_model(std::string images_path, ModelInfo& mi, bool bDebug) 
 
 void img_convert(std::string images_path) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
-	std::vector<std::string> images_seg = get_all_files_names_within_folder("../data/models_eval/deeplab_src/");
 	std::cout << "images size is " << images.size() << std::endl;
 	for (int i = 0; i < images.size(); i++) {
 		std::string image_name = images_path + '/' + images[i];
 		cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
 		if (src_img.channels() == 4) {// ensure there're 3 channels
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-			//cv::imwrite(image_name, src_img);
 		}
-		cv::Mat output_img = cv::imread("../data/models_eval/deeplab_src/" + images_seg[i], CV_LOAD_IMAGE_UNCHANGED);
-		cv::Mat scale_img;
-		cv::resize(output_img, scale_img, src_img.size());
+		cv::Mat out_img;
+		cv::cvtColor(src_img.clone(), out_img, CV_BGR2GRAY);
 		//cv::Mat src_img = cv::imread("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3/B/facade_00061.png", CV_LOAD_IMAGE_UNCHANGED);
 		//if (src_img.channels() == 4)
 		//	cv::cvtColor(src_img.clone(), src_img, CV_BGRA2BGR);
-		for (int i = 0; i < scale_img.size().height; i++) {
-			for (int j = 0; j < scale_img.size().width; j++) {
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
 				// wall
-				if (scale_img.at<cv::Vec3b>(i, j)[0] == 0 && scale_img.at<cv::Vec3b>(i, j)[1] == 0 && scale_img.at<cv::Vec3b>(i, j)[2] == 0) {
-					scale_img.at<cv::Vec3b>(i, j)[0] = 255;
-					scale_img.at<cv::Vec3b>(i, j)[1] = 0;
-					scale_img.at<cv::Vec3b>(i, j)[2] = 0;
+				if (src_img.at<cv::Vec3b>(i, j)[0] == 255 && src_img.at<cv::Vec3b>(i, j)[1] == 0 && src_img.at<cv::Vec3b>(i, j)[2] == 0) {
+					out_img.at<uchar>(i, j) = (uchar)255;
 				}
 				else
 				{
-					scale_img.at<cv::Vec3b>(i, j)[0] = 0;
-					scale_img.at<cv::Vec3b>(i, j)[1] = 0;
-					scale_img.at<cv::Vec3b>(i, j)[2] = 255;
+					out_img.at<uchar>(i, j) = (uchar)0;
 				}
 			}
 		}
-		cv::imwrite("../data/models_eval/deeplab/" + images[i], scale_img);
+		cv::imwrite(image_name, out_img);
 	}
 }
 
@@ -1882,7 +1938,7 @@ double get_image_quality_score(cv::Mat src_img, ModelInfo& mi) {
 	//std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
 	//reject_classifier_module->to(at::kCUDA);
 	//assert(reject_classifier_module != nullptr);
-	torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+	torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
 
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 
@@ -2089,8 +2145,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	mi.paddingSize = util::read1DArray(docModel, "paddingSize");
 	std::string reject_model = util::readStringValue(docModel, "reject_model");
 	// load reject model
-	//mi.reject_classifier_module = torch::jit::load(reject_model);
-	mi.reject_classifier_module->to(at::kCUDA);
+	mi.reject_classifier_module = torch::jit::load(reject_model);
+	mi.reject_classifier_module.to(at::kCUDA);
 	assert(mi.reject_classifier_module != nullptr);
 	// segmentation model type
 	mi.seg_module_type = util::readNumber(docModel, "seg_model_type", 0);
@@ -2098,23 +2154,23 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		// load segmentation_pan model
 		std::string seg_model_pan = util::readStringValue(docModel, "seg_model_pan");
 		// load segmentation model
-		//mi.seg_module_pan = torch::jit::load(seg_model_pan);
-		mi.seg_module_pan->to(at::kCUDA);
+		mi.seg_module_pan = torch::jit::load(seg_model_pan);
+		mi.seg_module_pan.to(at::kCUDA);
 		assert(mi.seg_module_pan != nullptr);
 	}
 	else if (mi.seg_module_type == 2) {
 		// load segmentation_histeq model
 		std::string seg_model_histeq = util::readStringValue(docModel, "seg_model_histeq");
 		// load segmentation model
-		//mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
-		mi.seg_module_histeq->to(at::kCUDA);
+		mi.seg_module_histeq = torch::jit::load(seg_model_histeq);
+		mi.seg_module_histeq.to(at::kCUDA);
 		assert(mi.seg_module_histeq != nullptr);
 	}
 	else{
 		std::string seg_model = util::readStringValue(docModel, "seg_model");
 		// load segmentation model
-		//mi.seg_module = torch::jit::load(seg_model);
-		mi.seg_module->to(at::kCUDA);
+		mi.seg_module = torch::jit::load(seg_model);
+		mi.seg_module.to(at::kCUDA);
 		assert(mi.seg_module != nullptr);
 	}
 	//
@@ -2128,8 +2184,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 	// path of DN model
 	std::string classifier_path = util::readStringValue(grammar_classifier, "model");
 	// load grammar classifier model
-	//mi.classifier_module = torch::jit::load(classifier_path);
-	mi.classifier_module->to(at::kCUDA);
+	mi.classifier_module = torch::jit::load(classifier_path);
+	mi.classifier_module.to(at::kCUDA);
 	assert(mi.classifier_module != nullptr);
 	mi.number_grammars = util::readNumber(grammar_classifier, "number_paras", 6);
 	// get facade folder path
@@ -2149,8 +2205,8 @@ void readModeljson(std::string modeljson, ModelInfo& mi) {
 		// path of DN model
 		mi.grammars[i].grammar_id = i + 1;
 		std::string model_path = util::readStringValue(grammar, "model");
-		//mi.grammars[i].grammar_model = torch::jit::load(model_path);
-		mi.grammars[i].grammar_model->to(at::kCUDA);
+		mi.grammars[i].grammar_model = torch::jit::load(model_path);
+		mi.grammars[i].grammar_model.to(at::kCUDA);
 		assert(mi.grammars[i].grammar_model != nullptr);
 		// number of paras
 		mi.grammars[i].number_paras = util::readNumber(grammar, "number_paras", 5);
@@ -2257,7 +2313,7 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 	//std::shared_ptr<torch::jit::script::Module> reject_classifier_module = torch::jit::load(model_path);
 	//reject_classifier_module->to(at::kCUDA);
 	//assert(reject_classifier_module != nullptr);
-	torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+	torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
 
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 
@@ -2278,7 +2334,7 @@ int reject(cv::Mat src_img, FacadeInfo& fi, ModelInfo& mi,  bool bDebug) {
 	if (best_class == 1 || best_score < 0.90) // bad facades
 		return 0;
 	else {
-		fi.good_conf = best_score;
+		fi.good_conf = -log(confidences_tensor.slice(1, 1, 2).item<float>());
 		int type = 0;
 		if (facadeSize[0] < targetSize[0] && facadeSize[1] < targetSize[1]) {
 			type = 1;
@@ -2854,7 +2910,7 @@ std::vector<double> compute_chip_info(ChipInfo chip, ModelInfo& mi, bool bDebug,
 
 	int best_class = -1;
 	// Deserialize the ScriptModule from a file using torch::jit::load().
-	torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+	torch::Tensor out_tensor = mi.classifier_module.forward(inputs).toTensor();
 	torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 	//std::cout << confidences_tensor.slice(1, 0, num_classes) << std::endl;
 	double best_score = 0;
@@ -2923,7 +2979,7 @@ int choose_best_chip(std::vector<ChipInfo> chips, ModelInfo& mi, bool bDebug, st
 
 				std::vector<torch::jit::IValue> inputs;
 				inputs.push_back(img_tensor);
-				torch::Tensor out_tensor = mi.reject_classifier_module->forward(inputs).toTensor();
+				torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
 
 				torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
 				confidence_values[i] = log(confidences_tensor.slice(1, 1, 2).item<float>());
@@ -3149,13 +3205,13 @@ void apply_segmentation_model(cv::Mat &croppedImage, cv::Mat &chip_seg, ModelInf
 	for (int i = 0; i < run_times; i++) {
 		torch::Tensor out_tensor;
 		if (mi.seg_module_type == 0) {
-			out_tensor = mi.seg_module->forward(inputs).toTensor();
+			out_tensor = mi.seg_module.forward(inputs).toTensor();
 		}
 		else if (mi.seg_module_type == 1) {
-			out_tensor = mi.seg_module_histeq->forward(inputs).toTensor();
+			out_tensor = mi.seg_module_histeq.forward(inputs).toTensor();
 		}
 		else {
-			out_tensor = mi.seg_module_pan->forward(inputs).toTensor();
+			out_tensor = mi.seg_module_pan.forward(inputs).toTensor();
 		}
 		out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
 		out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
@@ -3364,7 +3420,7 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 	if(true)
 	{
 		// Deserialize the ScriptModule from a file using torch::jit::load().
-		torch::Tensor out_tensor = mi.classifier_module->forward(inputs).toTensor();
+		torch::Tensor out_tensor = mi.classifier_module.forward(inputs).toTensor();
 		//std::cout << out_tensor.slice(1, 0, num_classes) << std::endl;
 
 		torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
@@ -3391,7 +3447,7 @@ std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool 
 	// number of paras
 	int num_paras = mi.grammars[best_class - 1].number_paras;
 
-	torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model->forward(inputs).toTensor();
+	torch::Tensor out_tensor_grammar = mi.grammars[best_class - 1].grammar_model.forward(inputs).toTensor();
 	std::cout << out_tensor_grammar.slice(1, 0, num_paras) << std::endl;
 	std::vector<double> paras;
 	for (int i = 0; i < num_paras; i++) {
