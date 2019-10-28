@@ -57,8 +57,8 @@ int main(int argc, const char* argv[]) {
 			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
 			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
 			std::cout << metajson << ", " << img_filename << std::endl;
-			/*if (img_filename != "0001_0048.png")
-				continue;*/
+			if (img_filename != "0014_0075.png")
+				continue;
 			// read metajson
 			FacadeInfo fi;
 			readMetajson(metajson, fi);
@@ -148,6 +148,61 @@ int main(int argc, const char* argv[]) {
 					score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
 					//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
 					std::cout << "score after is " << score << std::endl;
+					{
+						cv::Mat src_1 = src_facade.clone();
+						cv::Mat src_2 = syn_img_opt.clone();
+						cv::Mat outpt_img = src_1.clone();
+						// write back to json file
+						cv::Scalar bg_avg_color(0, 0, 0);
+						cv::Scalar win_avg_color(0, 0, 0);
+						{
+							int bg_count = 0;
+							int win_count = 0;
+							for (int i = 0; i < src_2.size().height; i++) {
+								for (int j = 0; j < src_2.size().width; j++) {
+									if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
+										win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+										win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+										win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+										win_count++;
+									}
+									else {
+										bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+										bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+										bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+										bg_count++;
+									}
+								}
+							}
+							if (win_count > 0) {
+								if (i == 4)
+									win_count -= 100;
+								win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+								win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+								win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+							}
+							if (bg_count > 0) {
+								bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+								bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+								bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+							}
+						}
+						for (int i = 0; i < src_2.size().height; i++) {
+							for (int j = 0; j < src_2.size().width; j++) {
+								if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
+									outpt_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
+									outpt_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
+									outpt_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+								}
+								else {
+									outpt_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
+									outpt_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
+									outpt_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+								}
+							}
+						}
+						cv::imwrite("../data/seg_opt_real/" + img_filename, outpt_img);
+					}
 				}
 			}
 			//writeMetajson(metajson, fi);
@@ -731,10 +786,10 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 		for (int v2 = -2; v2 <= 2; v2++) {
 			for (int v3 = v3_min; v3 <= v3_max; v3++) {
 				for (int v4 = v4_min; v4 <= v4_max; v4++) {
-					for (int m_t = 0; m_t <= 2; m_t++) {
-						for (int m_b = 0; m_b <= 2; m_b++) {
-							for (int m_l = 8; m_l <= 12; m_l++) {
-								for (int m_r = 8; m_r <= 12; m_r++) {
+					for (int m_t = 0; m_t <= 5; m_t++) {
+						for (int m_b = 0; m_b <= 5; m_b++) {
+							for (int m_l = 3; m_l <= 10; m_l++) {
+								for (int m_r = 0; m_r <= 5; m_r++) {
 									std::vector<double> predictions_tmp;
 									predictions_tmp.push_back(v1 + predictions_init[0]);
 									predictions_tmp.push_back(v2 + predictions_init[1]);
