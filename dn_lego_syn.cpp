@@ -10,23 +10,26 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	//adjust_seg_colors("../data/models_eval/B", "../data/models_eval/B_out");
+	//test_overlay_images("../data/models_eval/A", "../data/models_eval/B_out", "../data/models_eval/overlay_v1");
 	// eval segmentation models
-	/*{
-		int input_size = 256;
-		int d_size = 1;
-		std::string input_path = "../data/models_eval";
-		std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
-		std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
-		std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
-		std::string output_path = "../data/models_eval/deeplab";
-		std::string model_path = "../data/models_eval";
-		std::string result_path = "../data/models_eval/deeplab.txt";
-		std::cout << "input_path is " << input_path << std::endl;
-		std::cout << "output_path is " << output_path << std::endl;
-		std::cout << "model_path is " << model_path << std::endl;
-		std::cout << "result_path is " << result_path << std::endl;
-		eval_seg_models(input_path, output_path, "../seg_model.pt", input_size, result_path);
-	}*/
+	//{
+	//	int input_size = 64;
+	//	int d_size = 3;
+	//	std::string input_path = "../data/models_eval";
+	//	//std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
+	//	//std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
+	//	//std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
+	//	std::string output_path = "../data/models_eval/pix2pix_rect";
+	//	std::string model_path = "../data/models_eval";
+	//	std::string result_path = "../data/models_eval/pix2pix_rect.txt";
+	//	std::cout << "input_path is " << input_path << std::endl;
+	//	std::cout << "output_path is " << output_path << std::endl;
+	//	std::cout << "model_path is " << model_path << std::endl;
+	//	std::cout << "result_path is " << result_path << std::endl;
+	//	eval_seg_models(input_path, output_path, "../seg_model.pt", input_size, result_path);
+	//	return 0;
+	//}
 
 	// eval facade comparisons
 	//{
@@ -675,7 +678,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::vector<double> predictions_opt;
 		std::vector<double> trans_opt;
 		if (predictions.size() == 5 && bOpt) {
-			opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
+			opt_without_doors(gt_img, predictions_opt, predictions, 1/* mi.opt_step*/, mi.opt_range);
 			//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
 		}
 		if (predictions.size() == 8 && bOpt) {
@@ -687,7 +690,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		cv::Scalar win_avg_color(0, 0, 255, 0);
 		cv::Scalar bg_avg_color(255, 0, 0, 0);
 		int gt_blobs = blobs(gt_img);
-		cv::Mat syn_img = synthesis(predictions, src_img.size(), "../data", win_avg_color, bg_avg_color, false, "syn.png");
+		cv::Mat syn_img = synthesis(predictions, src_img.size(), "../data/test_no_opt", win_avg_color, bg_avg_color, true, images[i]);
 		std::vector<double> evaluations = eval_accuracy(syn_img, gt_img);
 		int tmp_blobs = 0;
 		if(predictions.size() == 5)
@@ -787,8 +790,8 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 				for (int v4 = v4_min; v4 <= v4_max; v4++) {
 					for (int m_t = 0; m_t <= 5; m_t++) {
 						for (int m_b = 0; m_b <= 5; m_b++) {
-							for (int m_l = 0; m_l <= 5; m_l++) {
-								for (int m_r = 0; m_r <= 5; m_r++) {
+							for (int m_l = 0; m_l <= 8; m_l++) {
+								for (int m_r = 0; m_r <= 8; m_r++) {
 									std::vector<double> predictions_tmp;
 									predictions_tmp.push_back(v1 + predictions_init[0]);
 									predictions_tmp.push_back(v2 + predictions_init[1]);
@@ -1791,27 +1794,10 @@ void img_convert(std::string images_path) {
 	for (int index = 0; index < images.size(); index++) {
 		std::string image_name = images_path + '/' + images[index];
 		cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
-		for (int i = 0; i < src_img.size().height; i++) {
-			for (int j = 0; j < src_img.size().width; j++) {
-				// wall
-				if (src_img.at<cv::Vec3b>(i, j)[0] == 0) {
-					src_img.at<cv::Vec3b>(i, j)[0] = 0;
-					src_img.at<cv::Vec3b>(i, j)[1] = 0;
-					src_img.at<cv::Vec3b>(i, j)[2] = 255;
-				}
-				else
-				{
-					src_img.at<cv::Vec3b>(i, j)[0] = 255;
-					src_img.at<cv::Vec3b>(i, j)[1] = 0;
-					src_img.at<cv::Vec3b>(i, j)[2] = 0;
-				}
-			}
+		if (src_img.channels() == 4) {// ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+			cv::imwrite(image_name, src_img);
 		}
-		cv::imwrite(image_name, src_img);
-
-		//if (src_img.channels() == 4) {// ensure there're 3 channels
-		//	cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
-		//}
 		//cv::Mat out_img;
 		//cv::cvtColor(src_img.clone(), out_img, CV_BGR2GRAY);
 		////cv::Mat src_img = cv::imread("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3/B/facade_00061.png", CV_LOAD_IMAGE_UNCHANGED);
