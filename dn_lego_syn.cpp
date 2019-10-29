@@ -10,36 +10,66 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	//adjust_seg_colors("../data/models_eval/B", "../data/models_eval/B_out");
+	if(false)
+	{
+		std::string path = "../data/models_eval";
+		std::vector<std::string> images = get_all_files_names_within_folder(path + "/enc_net_convt");
+		std::cout << "images size is " << images.size() << std::endl;
+		for (int index = 0; index < images.size(); index++) {
+			std::string img_name = path + "/enc_net_convt/" + images[index];
+			cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+			cv::Mat real_img = cv::imread(path + "/A/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+			cv::Mat scale_img;
+			cv::resize(src_img, scale_img, real_img.size());
+			cv::Mat seg_out = scale_img.clone();
+			// correct the color
+			for (int i = 0; i < scale_img.size().height; i++) {
+				for (int j = 0; j < scale_img.size().width; j++) {
+					//noise
+					if (scale_img.at<cv::Vec3b>(i, j)[2] > 128) {
+						seg_out.at<cv::Vec3b>(i, j)[0] = 0;
+						seg_out.at<cv::Vec3b>(i, j)[1] = 0;
+						seg_out.at<cv::Vec3b>(i, j)[2] = 255;
+					}
+					else {
+						seg_out.at<cv::Vec3b>(i, j)[0] = 255;
+						seg_out.at<cv::Vec3b>(i, j)[1] = 0;
+						seg_out.at<cv::Vec3b>(i, j)[2] = 0;
+					}
+				}
+			}
+			cv::imwrite(path + "/enc_net/" + images[index], seg_out);
+		}
+		return 0;
+	}
 	//test_overlay_images("../data/models_eval/A", "../data/models_eval/B_out", "../data/models_eval/overlay_v1");
 	// eval segmentation models
-	//{
-	//	int input_size = 64;
-	//	int d_size = 3;
-	//	std::string input_path = "../data/models_eval";
-	//	//std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
-	//	//std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
-	//	//std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
-	//	std::string output_path = "../data/models_eval/pix2pix_rect";
-	//	std::string model_path = "../data/models_eval";
-	//	std::string result_path = "../data/models_eval/pix2pix_rect.txt";
-	//	std::cout << "input_path is " << input_path << std::endl;
-	//	std::cout << "output_path is " << output_path << std::endl;
-	//	std::cout << "model_path is " << model_path << std::endl;
-	//	std::cout << "result_path is " << result_path << std::endl;
-	//	eval_seg_models(input_path, output_path, "../seg_model.pt", input_size, result_path);
-	//	return 0;
-	//}
+	{
+		int input_size = 256;
+		int d_size = 3;
+		std::string input_path = "../data/models_eval";
+		//std::string output_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size);
+		//std::string model_path = "../data/seg_models/seg_model_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".pt";
+		//std::string result_path = "../data/models_eval/pix2pix_" + std::to_string(input_size) + "_D" + std::to_string(d_size) + ".txt";
+		std::string output_path = "../data/models_eval/enc_net";
+		std::string model_path = "../data/models_eval";
+		std::string result_path = "../data/models_eval/enc_net.txt";
+		std::cout << "input_path is " << input_path << std::endl;
+		std::cout << "output_path is " << output_path << std::endl;
+		std::cout << "model_path is " << model_path << std::endl;
+		std::cout << "result_path is " << result_path << std::endl;
+		eval_seg_models(input_path, output_path, model_path, input_size, result_path);
+		return 0;
+	}
 
 	// eval facade comparisons
-	//{
-	//	std::string aoi = "../data/metrics_55/eval";
-	//	FacadeSeg eval_obj;
-	//	eval_obj.eval(aoi + "/pix2pix", aoi + "/gt", aoi + "/pix2pix_eval.txt");
-	//	//eval_obj.eval(aoi + "/deepFill", aoi + "/gt", aoi + "/deepFill_eval.txt");
-	//	eval_obj.eval(aoi + "/our_seg", aoi + "/gt", aoi + "/our_eval.txt");
-	//	eval_obj.eval(aoi + "/our_seg_opt", aoi + "/gt", aoi + "/our_opt_eval.txt");
-	//}
+	{
+		std::string aoi = "../data/metrics_all/eval";
+		//eval_seg_models(aoi + "/gt", aoi + "/pix2pix", aoi + "/pix2pix_eval.txt");
+		//eval_seg_models(aoi + "/gt", aoi + "/our_seg", aoi + "/our_eval.txt");
+		eval_seg_models(aoi + "/gt", aoi + "/our_seg_opt", aoi + "/our_opt_eval.txt");
+		return 0;
+	}
 
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
@@ -218,11 +248,9 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	std::cout << "images size is " << images.size() << std::endl;
 	// load model
 	std::cout << "model_path" << model_path << std::endl;
-	//torch::jit::script::Module eval_seg_module = torch::jit::load(model_path);
-	//std::shared_ptr<torch::jit::script::Module> eval_seg_module = torch::jit::load(model_path);
-	//eval_seg_module->to(at::kCUDA);
-	//eval_seg_module.to(at::kCUDA);
-	//assert(eval_seg_module != nullptr);
+	/*torch::jit::script::Module eval_seg_module = torch::jit::load(model_path);
+	eval_seg_module.to(at::kCUDA);
+	assert(eval_seg_module != nullptr);*/
 	std::ofstream out_param(results_txt, std::ios::app);
 	out_param << "facade_id";
 	out_param << ",";
@@ -341,6 +369,60 @@ void eval_seg_models(std::string images_path, std::string output_path, std::stri
 	out_param << avg_precision / images.size();
 	out_param << ",";
 	out_param << avg_recall / images.size();
+	out_param << "\n";
+}
+
+void eval_seg_models(std::string images_gt_path, std::string images_seg_path, std::string results_txt) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_gt_path);
+	std::ofstream out_param(results_txt, std::ios::app);
+	out_param << "facade_id";
+	out_param << ",";
+	out_param << "pAccuracy";
+	out_param << ",";
+	out_param << "precision";
+	out_param << ",";
+	out_param << "recall";
+	out_param << ",";
+	out_param << "blob";
+	out_param << "\n";
+	double avg_accuracy = 0;
+	double avg_precision = 0;
+	double avg_recall = 0;
+	double avg_blob = 0;
+	for (int index = 0; index < images.size(); index++) {
+		cv::Mat seg_img = cv::imread(images_seg_path + "/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		//eval
+		cv::Mat gt_img = cv::imread(images_gt_path + "/" + images[index], CV_LOAD_IMAGE_UNCHANGED);
+		int gt_blobs = blobs(gt_img);
+		int seg_blobs = blobs(seg_img);
+		//std::cout << "gt_blobs is " << gt_blobs << std::endl;
+		//std::cout << "seg_blobs is " << seg_blobs << std::endl;
+		double blobs_score = 1 - 1.0 * abs(seg_blobs - gt_blobs) / gt_blobs;
+		std::vector<double> evaluations = eval_accuracy(seg_img, gt_img);
+		out_param << images[index];
+		out_param << ",";
+		out_param << evaluations[0];
+		out_param << ",";
+		out_param << evaluations[1];
+		out_param << ",";
+		out_param << evaluations[2];
+		out_param << ",";
+		out_param << blobs_score;
+		out_param << "\n";
+		avg_accuracy += evaluations[0];
+		avg_precision += evaluations[1];
+		avg_recall += evaluations[2];
+		avg_blob += blobs_score;
+	}
+	out_param << "Average_Score";
+	out_param << ",";
+	out_param << avg_accuracy / images.size();
+	out_param << ",";
+	out_param << avg_precision / images.size();
+	out_param << ",";
+	out_param << avg_recall / images.size();
+	out_param << ",";
+	out_param << avg_blob / images.size();
 	out_param << "\n";
 }
 
@@ -604,6 +686,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 				}
 			}
 			best_class = best_class + 1;
+			best_class = 2;
 			std::cout << "DNN class is " << best_class << std::endl;
 		}
 		// choose conresponding estimation DNN
@@ -678,7 +761,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::vector<double> predictions_opt;
 		std::vector<double> trans_opt;
 		if (predictions.size() == 5 && bOpt) {
-			opt_without_doors(gt_img, predictions_opt, predictions, 1/* mi.opt_step*/, mi.opt_range);
+			opt_without_doors(seg_rgb, predictions_opt, predictions, 1/* mi.opt_step*/, mi.opt_range);
 			//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
 		}
 		if (predictions.size() == 8 && bOpt) {
@@ -784,14 +867,15 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 	std::cout << "v4_max is " << v4_max << std::endl;
 	std::cout << "step_size_m_w is " << step_size_m_w << std::endl;
 	std::cout << "step_size_m_h is " << step_size_m_h << std::endl;
+	int m_step = 6;
 	for (int v1 = -2; v1 <= 2; v1++) {
 		for (int v2 = -2; v2 <= 2; v2++) {
 			for (int v3 = v3_min; v3 <= v3_max; v3++) {
 				for (int v4 = v4_min; v4 <= v4_max; v4++) {
-					for (int m_t = 0; m_t <= 5; m_t++) {
-						for (int m_b = 0; m_b <= 5; m_b++) {
-							for (int m_l = 0; m_l <= 8; m_l++) {
-								for (int m_r = 0; m_r <= 8; m_r++) {
+					for (int m_t = 0; m_t <= m_step; m_t++) {
+						for (int m_b = 0; m_b <= m_step; m_b++) {
+							for (int m_l = 0; m_l <= m_step; m_l++) {
+								for (int m_r = 0; m_r <= m_step; m_r++) {
 									std::vector<double> predictions_tmp;
 									predictions_tmp.push_back(v1 + predictions_init[0]);
 									predictions_tmp.push_back(v2 + predictions_init[1]);
@@ -1798,53 +1882,53 @@ void img_convert(std::string images_path) {
 			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
 			cv::imwrite(image_name, src_img);
 		}
-		//cv::Mat out_img;
-		//cv::cvtColor(src_img.clone(), out_img, CV_BGR2GRAY);
-		////cv::Mat src_img = cv::imread("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3/B/facade_00061.png", CV_LOAD_IMAGE_UNCHANGED);
-		////if (src_img.channels() == 4)
-		////	cv::cvtColor(src_img.clone(), src_img, CV_BGRA2BGR);
-		//for (int i = 0; i < src_img.size().height; i++) {
-		//	for (int j = 0; j < src_img.size().width; j++) {
-		//		// wall
-		//		if (src_img.at<cv::Vec3b>(i, j)[0] == 255 && src_img.at<cv::Vec3b>(i, j)[1] == 0 && src_img.at<cv::Vec3b>(i, j)[2] == 0) {
-		//			out_img.at<uchar>(i, j) = (uchar)255;
-		//		}
-		//		else
-		//		{
-		//			out_img.at<uchar>(i, j) = (uchar)0;
-		//		}
-		//	}
-		//}
+		cv::Mat out_img;
+		cv::cvtColor(src_img.clone(), out_img, CV_BGR2GRAY);
+		//cv::Mat src_img = cv::imread("D:/LEGO_meeting_summer_2019/1012/src_facades/backup_v3/B/facade_00061.png", CV_LOAD_IMAGE_UNCHANGED);
+		//if (src_img.channels() == 4)
+		//	cv::cvtColor(src_img.clone(), src_img, CV_BGRA2BGR);
+		for (int i = 0; i < src_img.size().height; i++) {
+			for (int j = 0; j < src_img.size().width; j++) {
+				// wall
+				if (src_img.at<cv::Vec3b>(i, j)[0] == 255 && src_img.at<cv::Vec3b>(i, j)[1] == 0 && src_img.at<cv::Vec3b>(i, j)[2] == 0) {
+					out_img.at<uchar>(i, j) = (uchar)255;
+				}
+				else
+				{
+					out_img.at<uchar>(i, j) = (uchar)0;
+				}
+			}
+		}
 		//cv::imwrite(image_name, out_img);
-		// add padding
-		//int padding_size = 5;
-		//int borderType = cv::BORDER_CONSTANT;
-		//cv::Mat aligned_img_padding;
-		//cv::copyMakeBorder(src_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 255, 255));
-		//// bbox and color
-		//std::vector<std::vector<cv::Point> > contours;
-		//std::vector<cv::Vec4i> hierarchy;
-		//cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, cv::Point(0, 0));
+		//add padding
+		int padding_size = 5;
+		int borderType = cv::BORDER_CONSTANT;
+		cv::Mat aligned_img_padding;
+		cv::copyMakeBorder(out_img, aligned_img_padding, padding_size, padding_size, padding_size, padding_size, borderType, cv::Scalar(255, 255, 255));
+		// bbox and color
+		std::vector<std::vector<cv::Point> > contours;
+		std::vector<cv::Vec4i> hierarchy;
+		cv::findContours(aligned_img_padding, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, cv::Point(0, 0));
 
-		//std::vector<float> area_contours(contours.size());
-		//std::vector<cv::Rect> boundRect(contours.size());
-		//std::vector<cv::Scalar> colors(contours.size());
-		//for (int i = 0; i < contours.size(); i++)
-		//{
-		//	boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
-		//	area_contours[i] = cv::contourArea(contours[i]);
-		//}
-		//cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, cv::Scalar(255, 255, 255));
-		//for (int i = 0; i < contours.size(); i++)
-		//{
-		//	if (hierarchy[i][3] != 0) continue;
-		//	if (area_contours[i] < 15)
-		//		continue;
-		//	cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x - 1, boundRect[i].br().y - 1), cv::Scalar(0, 0, 0), -1);
-		//}
-		//dnn_img = dnn_img(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
+		std::vector<float> area_contours(contours.size());
+		std::vector<cv::Rect> boundRect(contours.size());
+		std::vector<cv::Scalar> colors(contours.size());
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = cv::boundingRect(cv::Mat(contours[i]));
+			area_contours[i] = cv::contourArea(contours[i]);
+		}
+		cv::Mat dnn_img = cv::Mat(aligned_img_padding.size(), CV_8UC3, cv::Scalar(255, 0, 0));
+		for (int i = 0; i < contours.size(); i++)
+		{
+			if (hierarchy[i][3] != 0) continue;
+			if (area_contours[i] < 15)
+				continue;
+			cv::rectangle(dnn_img, cv::Point(boundRect[i].tl().x + 1, boundRect[i].tl().y + 1), cv::Point(boundRect[i].br().x - 1, boundRect[i].br().y - 1), cv::Scalar(0, 0, 255), -1);
+		}
+		dnn_img = dnn_img(cv::Rect(padding_size, padding_size, src_img.size().width, src_img.size().height));
 		//cv::cvtColor(dnn_img, dnn_img, CV_BGR2GRAY);
-		//cv::imwrite("../data/pix2pix/" + images[i], dnn_img);
+		cv::imwrite("../data/pix2pix_sub_out/" + images[index], dnn_img);
 	}
 }
 
