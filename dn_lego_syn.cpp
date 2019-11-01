@@ -63,186 +63,187 @@ int main(int argc, const char* argv[]) {
 	//}
 
 	//eval facade comparisons
-	{
+	/*{
 		std::string aoi = "../data/metrics_all/eval";
 		eval_seg_models(aoi + "/gt_22", aoi + "/pix2pix", aoi + "/pix2pix_eval.txt");
 		eval_seg_models(aoi + "/gt_22", aoi + "/deepFill", aoi + "/deepFill_eval.txt");
 		eval_seg_models(aoi + "/gt_22", aoi + "/our_seg", aoi + "/our_eval.txt");
 		eval_seg_models(aoi + "/gt_22", aoi + "/our_seg_opt", aoi + "/our_opt_eval.txt");
 		return 0;
-	}
+	}*/
 
 	std::string path(argv[1]);
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
-	test_segmentation_model("../data/deepFill_test", mi);
+	//findPatches("../data/src/0014_0075.png", "../data/patches", 20, mi);
+	//test_segmentation_model("../data/deepFill_test", mi);
 	/*std::clock_t start;
 	double duration;
 	start = std::clock();
 	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
 	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
 	std::cout << "duration: " << duration << '\n';*/
-	return 0;
-
-	//for (int i = 0; i < clusters.size(); i++) {
-	//	std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
-	//	for (int j = 0; j < metaFiles.size(); j++) {
-	//		std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
-	//		std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
-	//		std::cout << metajson << ", " << img_filename << std::endl;
-	//		if (img_filename != "0014_0075.png")
-	//			continue;
-	//		// read metajson
-	//		FacadeInfo fi;
-	//		readMetajson(metajson, fi);
-	//		ChipInfo chip;
-	//		bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
-	//		if (bvalid) {
-	//			cv::Mat dnn_img;
-	//			process_chip(chip, mi, mi.debug, img_filename);
-	//			std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
-	//			std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
-	//			if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
-	//				cv::Scalar win_real_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
-	//				cv::Scalar bg_real_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
-	//				std::string img_name = fi.imgName;
-	//				cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
-	//				std::cout << "img_name is " << img_name << std::endl;
-	//				// compute windows or doors for the whole facade image
-	//				if (predictions.size() == 5) {
-	//					predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
-	//					predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
-	//				}
-	//				if (predictions.size() == 8) {
-	//					predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
-	//					predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
-	//					predictions[3] = int(predictions[3] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
-	//				}
-	//				// our results without opt
-	//				synthesis(predictions, src_facade.size(), mi.dnnsOutFolder, win_real_color, bg_real_color, mi.debug, img_filename);
-	//				// our results with opt
-	//				cv::Mat seg_rgb = cv::imread("../data/pix2pix/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
-	//				cv::Mat gt_img = cv::imread("../data/gt/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
-	//				double score_opt = 0;
-	//				bool bOpt = true;
-	//				std::vector<double> predictions_opt;
-	//				std::vector<double> trans_opt;
-	//				if (predictions.size() == 5 && bOpt) {
-	//					opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
-	//					//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
-	//				}
-	//				if (predictions.size() == 8 && bOpt) {
-	//					opt_with_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
-	//				}
-	//				/*cv::Scalar win_avg_color(0, 0, 255, 0);
-	//				cv::Scalar bg_avg_color(255, 0, 0, 0);
-	//				cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
-	//				cv::Scalar win_seg_color(0, 0, 255, 0);
-	//				cv::Scalar bg_seg_color(255, 0, 0, 0);
-	//				int gt_blobs = blobs(gt_img);
-	//				cv::Mat syn_img = synthesis(predictions, src_facade.size(), "../data", win_seg_color, bg_seg_color, false, "syn.png");
-	//				std::vector<double> evaluations = eval_accuracy(syn_img, gt_img);
-	//				int tmp_blobs = 0;
-	//				if (predictions.size() == 5)
-	//					tmp_blobs = predictions[0] * predictions[1];
-	//				else
-	//					tmp_blobs = predictions[0] * predictions[1] + predictions[3];
-	//				double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
-	//				//double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
-	//				double score = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
-	//				//double score = 0.5 * evaluations[1] + 0.5 *evaluations[2];
-	//				std::cout << "score before is " << score << std::endl;
-	//				std::cout << "predictions[0] is " << predictions[0] << std::endl;
-	//				std::cout << "predictions[1] is " << predictions[1] << std::endl;
-	//				std::cout << "predictions[3] is " << predictions[3] << std::endl;
-	//				std::cout << "predictions[4] is " << predictions[4] << std::endl;
-	//				std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
-	//				cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_facade.size(), win_seg_color, bg_seg_color, true, "../data/seg_opt/" + img_filename);
-	//				cv::imwrite("../data/test.png", seg_rgb);
-
-	//				std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, gt_img);
-	//				std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
-	//				std::cout << "predictions_opt[1] is " << predictions_opt[1] << std::endl;
-	//				std::cout << "predictions_opt[3] is " << predictions_opt[3] << std::endl;
-	//				std::cout << "predictions_opt[4] is " << predictions_opt[4] << std::endl;
-	//				std::cout << "predictions_opt[5] is " << predictions_opt[5] << std::endl;
-	//				std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
-	//				std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
-	//				std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
-	//				if (predictions.size() == 5)
-	//					tmp_blobs = predictions_opt[0] * predictions_opt[1];
-	//				else
-	//					tmp_blobs = predictions_opt[0] * predictions_opt[1] + predictions_opt[3];
-	//				blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
-	//				std::cout << "evaluations_opt[0] is " << evaluations_opt[0] << std::endl;
-	//				std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
-	//				std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
-	//				//score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
-	//				score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
-	//				//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
-	//				std::cout << "score after is " << score << std::endl;
-	//				{
-	//					cv::Mat src_1 = src_facade.clone();
-	//					cv::Mat src_2 = syn_img_opt.clone();
-	//					cv::Mat outpt_img = src_1.clone();
-	//					// write back to json file
-	//					cv::Scalar bg_avg_color(0, 0, 0);
-	//					cv::Scalar win_avg_color(0, 0, 0);
-	//					{
-	//						int bg_count = 0;
-	//						int win_count = 0;
-	//						for (int i = 0; i < src_2.size().height; i++) {
-	//							for (int j = 0; j < src_2.size().width; j++) {
-	//								if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
-	//									win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
-	//									win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
-	//									win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
-	//									win_count++;
-	//								}
-	//								else {
-	//									bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
-	//									bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
-	//									bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
-	//									bg_count++;
-	//								}
-	//							}
-	//						}
-	//						if (win_count > 0) {
-	//							if (i == 4)
-	//								win_count -= 100;
-	//							win_avg_color.val[0] = win_avg_color.val[0] / win_count;
-	//							win_avg_color.val[1] = win_avg_color.val[1] / win_count;
-	//							win_avg_color.val[2] = win_avg_color.val[2] / win_count;
-	//						}
-	//						if (bg_count > 0) {
-	//							bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
-	//							bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
-	//							bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
-	//						}
-	//					}
-	//					for (int i = 0; i < src_2.size().height; i++) {
-	//						for (int j = 0; j < src_2.size().width; j++) {
-	//							if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
-	//								outpt_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
-	//								outpt_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
-	//								outpt_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
-	//							}
-	//							else {
-	//								outpt_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
-	//								outpt_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
-	//								outpt_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
-	//							}
-	//						}
-	//					}
-	//					cv::imwrite("../data/seg_opt_real/" + img_filename, outpt_img);
-	//				}
-	//			}
-	//		}
-	//		//writeMetajson(metajson, fi);
-	//	}
-	//}
 	//return 0;
+
+	for (int i = 0; i < clusters.size(); i++) {
+		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
+		for (int j = 0; j < metaFiles.size(); j++) {
+			std::string metajson = path + "/" + clusters[i] + "/metadata/" + metaFiles[j];
+			std::string img_filename = clusters[i] + "_" + metaFiles[j].substr(0, metaFiles[j].find(".json")) + ".png";
+			std::cout << metajson << ", " << img_filename << std::endl;
+			/*if (img_filename != "0014_0075.png")
+				continue;*/
+			// read metajson
+			FacadeInfo fi;
+			readMetajson(metajson, fi);
+			ChipInfo chip;
+			bool bvalid = chipping(fi, mi, chip, true, mi.debug, img_filename);
+			if (false) {
+				cv::Mat dnn_img;
+				process_chip(chip, mi, mi.debug, img_filename);
+				std::vector<double> predictions = feedDnn(chip, fi, mi, mi.debug, img_filename);
+				std::cout << fi.win_color << ", " << fi.bg_color << std::endl;
+				if (fi.win_color.size() > 0 && fi.bg_color.size() > 0) {
+					cv::Scalar win_real_color(fi.win_color[0], fi.win_color[1], fi.win_color[2], 0);
+					cv::Scalar bg_real_color(fi.bg_color[0], fi.bg_color[1], fi.bg_color[2], 0);
+					std::string img_name = fi.imgName;
+					cv::Mat src_facade = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+					std::cout << "img_name is " << img_name << std::endl;
+					// compute windows or doors for the whole facade image
+					if (predictions.size() == 5) {
+						predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
+						predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+					}
+					if (predictions.size() == 8) {
+						predictions[0] = int(predictions[0] * 1.0 * src_facade.size().height / chip.seg_image.size().height);
+						predictions[1] = int(predictions[1] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+						predictions[3] = int(predictions[3] * 1.0 * src_facade.size().width / chip.seg_image.size().width);
+					}
+					// our results without opt
+					synthesis(predictions, src_facade.size(), mi.dnnsOutFolder, win_real_color, bg_real_color, mi.debug, img_filename);
+					// our results with opt
+					cv::Mat seg_rgb = cv::imread("../data/pix2pix/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
+					cv::Mat gt_img = cv::imread("../data/gt/" + img_filename, CV_LOAD_IMAGE_UNCHANGED);
+					double score_opt = 0;
+					bool bOpt = true;
+					std::vector<double> predictions_opt;
+					std::vector<double> trans_opt;
+					if (predictions.size() == 5 && bOpt) {
+						opt_without_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
+						//opt_without_doors(seg_rgb, predictions_opt, trans_opt, predictions);
+					}
+					if (predictions.size() == 8 && bOpt) {
+						opt_with_doors(seg_rgb, predictions_opt, predictions, mi.opt_step, mi.opt_range);
+					}
+					/*cv::Scalar win_avg_color(0, 0, 255, 0);
+					cv::Scalar bg_avg_color(255, 0, 0, 0);
+					cv::Mat syn_img = synthesis(predictions, src_img.size(), output_path, win_avg_color, bg_avg_color, true, images[i]);*/
+					cv::Scalar win_seg_color(0, 0, 255, 0);
+					cv::Scalar bg_seg_color(255, 0, 0, 0);
+					int gt_blobs = blobs(gt_img);
+					cv::Mat syn_img = synthesis(predictions, src_facade.size(), "../data", win_seg_color, bg_seg_color, false, "syn.png");
+					std::vector<double> evaluations = eval_accuracy(syn_img, gt_img);
+					int tmp_blobs = 0;
+					if (predictions.size() == 5)
+						tmp_blobs = predictions[0] * predictions[1];
+					else
+						tmp_blobs = predictions[0] * predictions[1] + predictions[3];
+					double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+					//double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
+					double score = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+					//double score = 0.5 * evaluations[1] + 0.5 *evaluations[2];
+					std::cout << "score before is " << score << std::endl;
+					std::cout << "predictions[0] is " << predictions[0] << std::endl;
+					std::cout << "predictions[1] is " << predictions[1] << std::endl;
+					std::cout << "predictions[3] is " << predictions[3] << std::endl;
+					std::cout << "predictions[4] is " << predictions[4] << std::endl;
+					std::cout << "predictions_opt size is " << predictions_opt.size() << std::endl;
+					cv::Mat syn_img_opt = synthesis_opt(predictions_opt, src_facade.size(), win_seg_color, bg_seg_color, true, "../data/seg_opt/" + img_filename);
+					cv::imwrite("../data/test.png", seg_rgb);
+
+					std::vector<double> evaluations_opt = eval_accuracy(syn_img_opt, gt_img);
+					std::cout << "predictions_opt[0] is " << predictions_opt[0] << std::endl;
+					std::cout << "predictions_opt[1] is " << predictions_opt[1] << std::endl;
+					std::cout << "predictions_opt[3] is " << predictions_opt[3] << std::endl;
+					std::cout << "predictions_opt[4] is " << predictions_opt[4] << std::endl;
+					std::cout << "predictions_opt[5] is " << predictions_opt[5] << std::endl;
+					std::cout << "predictions_opt[6] is " << predictions_opt[6] << std::endl;
+					std::cout << "predictions_opt[7] is " << predictions_opt[7] << std::endl;
+					std::cout << "predictions_opt[8] is " << predictions_opt[8] << std::endl;
+					if (predictions.size() == 5)
+						tmp_blobs = predictions_opt[0] * predictions_opt[1];
+					else
+						tmp_blobs = predictions_opt[0] * predictions_opt[1] + predictions_opt[3];
+					blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
+					std::cout << "evaluations_opt[0] is " << evaluations_opt[0] << std::endl;
+					std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
+					std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
+					//score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
+					score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
+					//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
+					std::cout << "score after is " << score << std::endl;
+					{
+						cv::Mat src_1 = src_facade.clone();
+						cv::Mat src_2 = syn_img_opt.clone();
+						cv::Mat outpt_img = src_1.clone();
+						// write back to json file
+						cv::Scalar bg_avg_color(0, 0, 0);
+						cv::Scalar win_avg_color(0, 0, 0);
+						{
+							int bg_count = 0;
+							int win_count = 0;
+							for (int i = 0; i < src_2.size().height; i++) {
+								for (int j = 0; j < src_2.size().width; j++) {
+									if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
+										win_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+										win_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+										win_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+										win_count++;
+									}
+									else {
+										bg_avg_color.val[0] += src_1.at<cv::Vec3b>(i, j)[0];
+										bg_avg_color.val[1] += src_1.at<cv::Vec3b>(i, j)[1];
+										bg_avg_color.val[2] += src_1.at<cv::Vec3b>(i, j)[2];
+										bg_count++;
+									}
+								}
+							}
+							if (win_count > 0) {
+								if (i == 4)
+									win_count -= 100;
+								win_avg_color.val[0] = win_avg_color.val[0] / win_count;
+								win_avg_color.val[1] = win_avg_color.val[1] / win_count;
+								win_avg_color.val[2] = win_avg_color.val[2] / win_count;
+							}
+							if (bg_count > 0) {
+								bg_avg_color.val[0] = bg_avg_color.val[0] / bg_count;
+								bg_avg_color.val[1] = bg_avg_color.val[1] / bg_count;
+								bg_avg_color.val[2] = bg_avg_color.val[2] / bg_count;
+							}
+						}
+						for (int i = 0; i < src_2.size().height; i++) {
+							for (int j = 0; j < src_2.size().width; j++) {
+								if (src_2.at<cv::Vec3b>(i, j)[0] == 0) {
+									outpt_img.at<cv::Vec3b>(i, j)[0] = win_avg_color.val[0];
+									outpt_img.at<cv::Vec3b>(i, j)[1] = win_avg_color.val[1];
+									outpt_img.at<cv::Vec3b>(i, j)[2] = win_avg_color.val[2];
+								}
+								else {
+									outpt_img.at<cv::Vec3b>(i, j)[0] = bg_avg_color.val[0];
+									outpt_img.at<cv::Vec3b>(i, j)[1] = bg_avg_color.val[1];
+									outpt_img.at<cv::Vec3b>(i, j)[2] = bg_avg_color.val[2];
+								}
+							}
+						}
+						cv::imwrite("../data/seg_opt_real/" + img_filename, outpt_img);
+					}
+				}
+			}
+			//writeMetajson(metajson, fi);
+		}
+	}
+	return 0;
 }
 
 void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt) {
@@ -1126,7 +1127,7 @@ void generate_synFacade(std::string src_image_name, std::vector<double> paras, s
 
 }
 
-void findPatches(std::string image_name, std::string output_path, int step) {
+void findPatches(std::string image_name, std::string output_path, int step, ModelInfo& mi) {
 	cv::Mat src_img = cv::imread(image_name, CV_LOAD_IMAGE_UNCHANGED);
 	std::vector<cv::Rect> rectangles;
 	int w_count = src_img.size().width / step;
@@ -1141,8 +1142,8 @@ void findPatches(std::string image_name, std::string output_path, int step) {
 		for (int j = 0; j < h_count; j++) {
 			cv::Point center(start_x + i * step + 0.5 * step, start_y + j * step + 0.5 * step);
 			std::cout << "center is " << center << std::endl;
-			for (int width = step; width <= 3 * step; width += 0.5 * step) {
-				for (int height = step; height <= 3 * step; height += 0.5 * step) {
+			for (int width = step; width <= 3 * step; width += 5) {
+				for (int height = step; height <= 3 * step; height += 5) {
 					cv::Point l1(center.x - 0.5 * width, center.y - 0.5 * height);
 					cv::Point r1(center.x + 0.5 * width, center.y + 0.5 * height);
 					if (l1.x < 0 || l1.y < 0)
@@ -1166,6 +1167,43 @@ void findPatches(std::string image_name, std::string output_path, int step) {
 		cv::imwrite(output_path + "/chip_" + std::to_string(index) + ".png", croppedImage);
 	}
 	cv::imwrite("../data/patch.png", drawing);
+
+	double best_score = 10000;
+	int best_class = -1;
+	for (int index = 0; index < rectangles.size(); index++) {
+		std::string img_name = output_path + "/chip_" + std::to_string(index) + ".png";
+		std::cout << img_name << std::endl;
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		// prepare inputs
+		cv::Mat scale_img;
+		cv::resize(src_img, scale_img, cv::Size(224, 224));
+		cv::Mat dnn_img_rgb;
+		cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		auto img_tensor = torch::from_blob(img_float.data, { 1, 224, 224, 3 }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.485).div(0.229);
+		img_tensor[0][1] = img_tensor[0][1].sub(0.456).div(0.224);
+		img_tensor[0][2] = img_tensor[0][2].sub(0.406).div(0.225);
+
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+		torch::Tensor out_tensor = mi.reject_classifier_module.forward(inputs).toTensor();
+
+		torch::Tensor confidences_tensor = torch::softmax(out_tensor, 1);
+		double tmp = log(confidences_tensor.slice(1, 1, 2).item<float>());
+		std::cout << img_name <<", " << tmp << std::endl;
+		if (tmp < best_score) {
+			best_score = tmp;
+			best_class = index;
+		}
+	}
+	std::cout << "best chip is " << best_class << std::endl;
+	cv::Mat best_img = cv::imread(output_path + "/chip_" + std::to_string(best_class) + ".png", CV_LOAD_IMAGE_UNCHANGED);
+	cv::imwrite("../data/best_patch.png", best_img);
 }
 
 void adjust_seg_colors(std::string image_path, std::string output_path) {
@@ -2587,7 +2625,8 @@ bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo &chip, bool bMultipleChips
 	// choose the best chip
 	std::vector<ChipInfo> cropped_chips;
 	if(!bground)
-		cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
+		//cropped_chips = crop_chip_no_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
+		cropped_chips = crop_chip_multi_scale(src_facade.clone(), type, facadeSize, targetSize);
 	else
 		cropped_chips = crop_chip_ground(src_facade.clone(), type, facadeSize, targetSize, bMultipleChips);
 
@@ -2790,6 +2829,45 @@ void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool b
 			}
 		}
 	}
+}
+
+std::vector<ChipInfo> crop_chip_multi_scale(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize) {
+	std::vector<ChipInfo> cropped_chips;
+	cv::Mat src_img = src_facade.clone();
+	int step = src_img.size().width * targetSize[0] / facadeSize[0];
+	std::vector<cv::Rect> rectangles;
+	int w_count = src_img.size().width / step;
+	int h_count = src_img.size().height / step;
+	int start_x = 0.5 * (src_img.size().width - w_count * step);
+	int start_y = 0.5 * (src_img.size().height - h_count * step);
+	for (int i = 0; i < w_count; i++) {
+		for (int j = 0; j < h_count; j++) {
+			cv::Point center(start_x + i * step + 0.5 * step, start_y + j * step + 0.5 * step);
+			for (int width = step; width <= 4 * step; width += 0.5 * step) {
+				for (int height = step; height <= 4 * step; height += 0.5 * step) {
+					cv::Point l1(center.x - 0.5 * width, center.y - 0.5 * height);
+					cv::Point r1(center.x + 0.5 * width, center.y + 0.5 * height);
+					if (l1.x < 0 || l1.y < 0)
+						continue;
+					if (r1.x > src_img.size().width || r1.y > src_img.size().height)
+						continue;
+					cv::Rect tmp = cv::Rect(l1, cv::Size2f(width, height));
+					rectangles.push_back(tmp);
+				}
+			}
+		}
+	}
+	for (int index = 0; index < rectangles.size(); index++)
+	{
+		ChipInfo chip;
+		chip.src_image = src_img(rectangles[index]);
+		chip.x = rectangles[index].x;
+		chip.y = rectangles[index].y;
+		chip.width = rectangles[index].width;
+		chip.height = rectangles[index].height;
+		cropped_chips.push_back(chip);
+	}
+	return cropped_chips;
 }
 
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips) {

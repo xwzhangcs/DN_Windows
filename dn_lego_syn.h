@@ -107,7 +107,7 @@ void split_images(std::string image_path, std::string output_path);
 void merge_images(std::string images_path, std::string output_path, int width, int height);
 void adjust_seg_colors(std::string image_path, std::string output_path);
 void conver2seg(std::string image_path, std::string output_path);
-void findPatches(std::string image_name, std::string output_path, int step);
+void findPatches(std::string image_name, std::string output_path, int step, ModelInfo& mi);
 void test_seg2grammars(ModelInfo& mi, std::string image_name, std::string output_path);
 void generate_synFacade(std::string src_image_name, std::vector<double> paras, std::string out_image_name);
 void test_affine_transformation(std::string image_path, std::string output_path);
@@ -143,6 +143,8 @@ void pre_process(cv::Mat &chip_seg, cv::Mat& croppedImage, ModelInfo& mi, bool b
 bool chipping(FacadeInfo& fi, ModelInfo& mi, ChipInfo& chip, bool bMultipleChips, bool bDebug, std::string img_filename);
 std::vector<ChipInfo> crop_chip_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
 std::vector<ChipInfo> crop_chip_no_ground(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize, bool bMultipleChips);
+std::vector<ChipInfo> crop_chip_multi_scale(cv::Mat src_facade, int type, std::vector<double> facadeSize, std::vector<double> targetSize);
+
 bool process_chip(ChipInfo &chip, ModelInfo& mi, bool bDebug, std::string img_filename);
 std::vector<double> feedDnn(ChipInfo &chip, FacadeInfo& fi, ModelInfo& mi, bool bDebug, std::string img_filename);
 cv::Mat synthesis(std::vector<double> predictions, cv::Size src_size, std::string dnnsOut_folder, cv::Scalar win_avg_color, cv::Scalar bg_avg_color, bool bDebug, std::string img_filename);
