@@ -10,6 +10,11 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
+	if (true) {
+		eval_seg_models("D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\gt", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\our_seg", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\eval_seg.txt");
+		//eval_seg_models("../data/opt/gt", "../data/opt/our_seg_opt", "../data/opt/eval_opt.txt");
+		return 0;
+	}
 	if(false)
 	{
 		std::string path = "../data/models_eval";
@@ -78,13 +83,15 @@ int main(int argc, const char* argv[]) {
 	readModeljson(argv[3], mi);
 	//findPatches("../data/src/0014_0075.png", "../data/patches", 20, mi);
 	//test_segmentation_model("../data/deepFill_test", mi);
-	/*std::clock_t start;
+	/*
+	std::clock_t start;
 	double duration;
 	start = std::clock();
 	test_seg2grammars(mi, "../data/test_opt", "../data/test_opt_out");
 	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-	std::cout << "duration: " << duration << '\n';*/
-	//return 0;
+	std::cout << "duration: " << duration << '\n';
+	return 0;
+	*/
 
 	for (int i = 0; i < clusters.size(); i++) {
 		std::vector<std::string> metaFiles = get_all_files_names_within_folder(path + "/" + clusters[i] + "/metadata");
@@ -244,6 +251,70 @@ int main(int argc, const char* argv[]) {
 		}
 	}
 	return 0;
+}
+
+
+
+void computeVerAndHor(std::string images_path, std::string output_path) {
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
+	std::cout << "images size is " << images.size() << std::endl;
+	for (int index = 0; index < images.size(); index++) {
+		std::string img_name = images_path + "/" + images[index];
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		cv::Mat grayImg;
+		if (src_img.channels() == 3)
+			cv::cvtColor(src_img, grayImg, cv::COLOR_RGB2GRAY);
+		else
+			grayImg = src_img.clone();
+		cv::Mat sobelx;
+		cv::Sobel(grayImg, sobelx, CV_32F, 1, 0);
+		sobelx = cv::abs(sobelx);
+		cv::Mat sobely;
+		cv::Sobel(grayImg, sobely, CV_32F, 0, 1);
+		sobely = cv::abs(sobely);
+		
+		// sum up the gradient magnitude horizontally and vertically
+		cv::Mat sobelx_hor, sobelx_ver;
+		cv::reduce(sobelx, sobelx_hor, 0, CV_REDUCE_SUM);
+		cv::reduce(sobelx, sobelx_ver, 1, CV_REDUCE_SUM);
+		cv::Mat sobely_hor, sobely_ver;
+		cv::reduce(sobely, sobely_hor, 0, CV_REDUCE_SUM);
+		cv::reduce(sobely, sobely_ver, 1, CV_REDUCE_SUM);
+		//cout << "sobelx " << sobelx.row(1) << std::endl;
+		//cout << "sobelx " << sobelx.row(1).size() << std::endl;
+		//cout << "sobelx_ver " << sobelx_ver.row(1) << std::endl;
+		
+		//compute Ver and Hor
+		cv::Mat_<float> Ver, Hor;
+		Ver = sobelx_ver/* - sobely_ver * alpha*/;
+		Hor = sobely_hor/* - sobelx_hor * alpha*/;
+		std::cout << "Ver is " << Ver.size() << std::endl;
+		std::cout << "Ver is " << Ver << std::endl;
+		// compute min/max
+		double min_Ver, max_Ver;
+		cv::minMaxLoc(Ver, &min_Ver, &max_Ver);
+		double min_Hor, max_Hor;
+		cv::minMaxLoc(Ver, &min_Hor, &max_Hor);
+
+		// normalize Ver and Hor
+		Ver = (Ver - min_Ver) / (max_Ver - min_Ver);
+		Hor = (Hor - min_Hor) / (max_Hor - min_Hor);
+
+		Hor = Hor.t();
+		//std::cout << "Ver is " << Ver << std::endl;
+		//std::cout << "Hor is " << Hor << std::endl;
+
+		// draw lines
+		/*for (int i = 0; i < Ver.size(); i++) {
+
+		}
+		int thickness = 1;
+		int lineType = cv::LINE_8;
+		cv::line(src_img, start, end, cv::Scalar(0, 0, 255), thickness, lineType);*/
+
+		//cv::imwrite(output_path + "/hor_" + images[index], src_img);
+		//cv::imwrite(output_path + "/ver_" + images[index], src_img);
+	}
 }
 
 void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt) {
@@ -689,7 +760,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 				}
 			}
 			best_class = best_class + 1;
-			best_class = 2;
+			//best_class = 2;
 			std::cout << "DNN class is " << best_class << std::endl;
 		}
 		// choose conresponding estimation DNN
@@ -785,7 +856,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 			tmp_blobs = predictions[0] * predictions[1] + predictions[3];
 		double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 		//double score = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 * evaluations[2] + 0.25 * blobs_score;
-		double score = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+		double score = 2 * evaluations[1] * evaluations[2] / (evaluations[1] + evaluations[2]);
 		//double score = 0.5 * evaluations[1] + 0.5 *evaluations[2];
 		std::cout << "score before is " << score << std::endl;
 		std::cout << "predictions[0] is " << predictions[0] << std::endl;
@@ -814,7 +885,7 @@ void test_seg2grammars(ModelInfo& mi, std::string image_path, std::string output
 		std::cout << "evaluations_opt[1] is " << evaluations_opt[1] << std::endl;
 		std::cout << "evaluations_opt[2] is " << evaluations_opt[2] << std::endl;
 		//score = 0.25 * evaluations_opt[0] + 0.25 * evaluations_opt[1] + 0.25 *evaluations_opt[2] + 0.25 * blobs_score;
-		score = 0.34 * evaluations_opt[0] + 0.33 * evaluations_opt[1] + 0.33 *evaluations_opt[2];
+		score = 2 * evaluations_opt[1] * evaluations_opt[2] / (evaluations_opt[1] + evaluations_opt[2]);
 		//score = 0.5 * evaluations_opt[1] + 0.5 *evaluations_opt[2];
 		std::cout << "score after is " << score << std::endl;
 	}
@@ -902,7 +973,8 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 									//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
 									//std::cout << "blobs_score is " << blobs_score << std::endl;
 									//double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
-									double score_tmp = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+									//double score_tmp = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+									double score_tmp = 2 * evaluations[1] * evaluations[2] / (evaluations[1] + evaluations[2]);
 									//double score_tmp =  0.5 * evaluations[1] + 0.5 *evaluations[2];
 									//std::cout << "score_tmp is " << score_tmp << std::endl;
 									if (score_tmp > score_opt) {
@@ -977,7 +1049,7 @@ void opt_without_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, s
 												double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 												//std::cout << "tmp_blobs is " << tmp_blobs << std::endl;
 												//std::cout << "blobs_score is " << blobs_score << std::endl;
-												double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
+												double score_tmp = 2 * evaluations[1] * evaluations[2] / (evaluations[1] + evaluations[2]);
 												//std::cout << "score_tmp is " << score_tmp << std::endl;
 												if (score_tmp > score_opt) {
 													score_opt = score_tmp;
@@ -1068,7 +1140,7 @@ void opt_with_doors(cv::Mat& seg_rgb, std::vector<double>& predictions_opt, std:
 													double blobs_score = 1 - 1.0 * abs(tmp_blobs - gt_blobs) / gt_blobs;
 													std::vector<double> evaluations = util::eval_accuracy(syn_img, seg_rgb);
 													//double score_tmp = 0.25 * evaluations[0] + 0.25 * evaluations[1] + 0.25 *evaluations[2] + 0.25 * blobs_score;
-													double score_tmp = 0.34 * evaluations[0] + 0.33 * evaluations[1] + 0.33 *evaluations[2];
+													double score_tmp = 2 * evaluations[1] * evaluations[2] / (evaluations[1] + evaluations[2]);
 													//double score_tmp = 0.5 * evaluations[1] + 0.5 *evaluations[2];
 													//std::cout << "score_tmp is " << score_tmp << std::endl;
 													if (score_tmp > score_opt) {
