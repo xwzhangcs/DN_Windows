@@ -118,6 +118,7 @@ void img_convert(std::string images_path, std::string segs_path);
 void eval_seg_models(std::string images_path, std::string output_path, std::string model_path, int segImageSize, std::string results_txt);
 void eval_seg_models(std::string images_gt_path, std::string images_seg_path, std::string results_txt);
 void test_ensemble_models(std::string images_path, std::string output_path, std::string model_imgs_path, std::string results_txt);
+void test_autoencoder_model(std::string images_path, ModelInfo& mi);
 
 /**** helper functions *****/
 std::vector<std::string> get_all_files_names_within_folder(std::string folder);

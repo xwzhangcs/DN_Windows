@@ -10,8 +10,8 @@ int main(int argc, const char* argv[]) {
 		std::cerr << "usage: app <path-to-metadata> <path-to-model-config-JSON-file>\n";
 		return -1;
 	}
-	if (true) {
-		eval_seg_models("D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\gt", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\our_seg", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\eval_seg.txt");
+	if (false) {
+		//eval_seg_models("D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\gt", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\our_seg", "D:\\LEGO_meeting_spring_2020\\0228_F_score\\opt\\eval_seg.txt");
 		//eval_seg_models("../data/opt/gt", "../data/opt/our_seg_opt", "../data/opt/eval_opt.txt");
 		return 0;
 	}
@@ -81,6 +81,8 @@ int main(int argc, const char* argv[]) {
 	std::vector<std::string> clusters = get_all_files_names_within_folder(argv[1]);
 	ModelInfo mi;
 	readModeljson(argv[3], mi);
+	test_autoencoder_model("../data/AE_test", mi);
+	return 0;
 	//findPatches("../data/src/0014_0075.png", "../data/patches", 20, mi);
 	//test_segmentation_model("../data/deepFill_test", mi);
 	/*
@@ -253,7 +255,130 @@ int main(int argc, const char* argv[]) {
 	return 0;
 }
 
+void test_autoencoder_model(std::string images_path, ModelInfo& mi) {
+	cv::Scalar bg_color(255, 255, 255); // white back ground
+	cv::Scalar window_color(0, 0, 0); // black for windows
+	std::vector<std::string> images = get_all_files_names_within_folder(images_path + "/src");
+	for (int index = 0; index < images.size(); index++) {
+		std::string img_name = images_path + "/src/" + images[index];
+		std::cout << "img_name is " << img_name << std::endl;
+		cv::Mat src_img = cv::imread(img_name, CV_LOAD_IMAGE_UNCHANGED);
+		if (src_img.channels() == 4) // ensure there're 3 channels
+			cv::cvtColor(src_img, src_img, CV_BGRA2BGR);
+		int run_times = 3;
+		// scale to seg size
+		cv::Mat scale_img;
+		cv::resize(src_img, scale_img, cv::Size(mi.segImageSize[0], mi.segImageSize[1]));
+		cv::Mat dnn_img_rgb;
+		if (mi.seg_module_type == 0) {
+			cv::cvtColor(scale_img, dnn_img_rgb, CV_BGR2RGB);
+		}
+		else if (mi.seg_module_type == 1) {
+			cv::Mat scale_histeq, hsv_src;
+			cvtColor(scale_img, hsv_src, cv::COLOR_BGR2HSV);
+			std::vector<cv::Mat> bgr;   //destination array
+			cv::split(hsv_src, bgr);//split source 
+			cv::equalizeHist(bgr[2], bgr[2]);
+			cv::merge(bgr, scale_histeq);
+			cvtColor(scale_histeq, scale_histeq, cv::COLOR_HSV2BGR);
+			cv::cvtColor(scale_histeq, dnn_img_rgb, CV_BGR2RGB);
+		}
+		else {
+			cv::Mat scale_pan, hsv_src;
+			cvtColor(scale_img, hsv_src, cv::COLOR_BGR2HSV);
+			std::vector<cv::Mat> bgr;   //destination array
+			cv::split(hsv_src, bgr);//split source 
+			cv::equalizeHist(bgr[2], bgr[2]);
+			dnn_img_rgb = bgr[2];
+		}
+		cv::Mat img_float;
+		dnn_img_rgb.convertTo(img_float, CV_32F, 1.0 / 255);
+		int channels = 3;
+		if (mi.seg_module_type == 2)
+			channels = 1;
+		auto img_tensor = torch::from_blob(img_float.data, { 1, (int)mi.segImageSize[0], (int)mi.segImageSize[1], channels }).to(torch::kCUDA);
+		img_tensor = img_tensor.permute({ 0, 3, 1, 2 });
+		img_tensor[0][0] = img_tensor[0][0].sub(0.5).div(0.5);
+		if (mi.seg_module_type != 2) {
+			img_tensor[0][1] = img_tensor[0][1].sub(0.5).div(0.5);
+			img_tensor[0][2] = img_tensor[0][2].sub(0.5).div(0.5);
+		}
 
+		std::vector<torch::jit::IValue> inputs;
+		inputs.push_back(img_tensor);
+		std::vector<std::vector<int>> color_mark;
+		color_mark.resize((int)mi.segImageSize[1]);
+		for (int i = 0; i < color_mark.size(); i++) {
+			color_mark[i].resize((int)mi.segImageSize[0]);
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				color_mark[i][j] = 0;
+			}
+		}
+		// run three times
+		for (int i = 0; i < run_times; i++) {
+			torch::Tensor out_tensor;
+			if (mi.seg_module_type == 0) {
+				out_tensor = mi.seg_module.forward(inputs).toTensor();
+			}
+			else if (mi.seg_module_type == 1) {
+				out_tensor = mi.seg_module_histeq.forward(inputs).toTensor();
+			}
+			else {
+				out_tensor = mi.seg_module_pan.forward(inputs).toTensor();
+			}
+			out_tensor = out_tensor.squeeze().detach().permute({ 1,2,0 });
+			out_tensor = out_tensor.add(1).mul(0.5 * 255).clamp(0, 255).to(torch::kU8);
+			//out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
+			out_tensor = out_tensor.to(torch::kCPU);
+			cv::Mat resultImg((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC3);
+			std::memcpy((void*)resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8)*out_tensor.numel());
+			// gray img
+			// correct the color
+			for (int h = 0; h < resultImg.size().height; h++) {
+				for (int w = 0; w < resultImg.size().width; w++) {
+					if (resultImg.at<cv::Vec3b>(h, w)[0] > 160)
+						color_mark[h][w] += 0;
+					else
+						color_mark[h][w] += 1;
+				}
+			}
+		}
+		cv::Mat gray_img((int)mi.segImageSize[0], (int)mi.segImageSize[1], CV_8UC1);
+		int num_majority = ceil(0.5 * run_times);
+		for (int i = 0; i < color_mark.size(); i++) {
+			for (int j = 0; j < color_mark[i].size(); j++) {
+				if (color_mark[i][j] < num_majority)
+					gray_img.at<uchar>(i, j) = (uchar)0;
+				else
+					gray_img.at<uchar>(i, j) = (uchar)255;
+			}
+		}
+		// scale to grammar size
+		cv::Mat chip_seg;
+		//cv::resize(gray_img, chip_seg, src_img.size());
+		cv::resize(gray_img, chip_seg, cv::Size(128, 128));
+		// correct the color
+		for (int i = 0; i < chip_seg.size().height; i++) {
+			for (int j = 0; j < chip_seg.size().width; j++) {
+				//noise
+				if ((int)chip_seg.at<uchar>(i, j) < 100) {
+					chip_seg.at<uchar>(i, j) = (uchar)255;
+				}
+				else
+					chip_seg.at<uchar>(i, j) = (uchar)0;
+			}
+		}
+		std::string output_img_name = "";
+		if (mi.seg_module_type == 0)
+			output_img_name = images_path + "/segs_normal/" + images[index];
+		else if (mi.seg_module_type == 1)
+			output_img_name = images_path + "/segs_histeq/" + images[index];
+		else
+			output_img_name = images_path + "/segs_pan/" + images[index];
+		cv::imwrite(output_img_name, chip_seg);
+
+	}
+}
 
 void computeVerAndHor(std::string images_path, std::string output_path) {
 	std::vector<std::string> images = get_all_files_names_within_folder(images_path);
